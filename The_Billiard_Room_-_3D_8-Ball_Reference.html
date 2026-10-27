@@ -1,0 +1,3248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>The Billiard Room — 3D 8-Ball Reference Edition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --bg-deep: #0c0a08;
+      --panel-bg: rgba(22, 18, 15, 0.86);
+      --panel-border: rgba(200, 164, 100, 0.28);
+      --brass: #c8a464;
+      --brass-bright: #e5c384;
+      --cream: #f4ece1;
+      --muted: #a6998a;
+      --danger: #e05a47;
+      --success: #52b788;
+      --hud-opacity: 0.95;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at center, #1c1612 0%, #090706 100%);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: var(--cream);
+      touch-action: none;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
+
+    #vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      background: radial-gradient(circle at 50% 50%, transparent 58%, rgba(6, 4, 3, 0.72) 100%);
+    }
+
+    /* HUD Layer */
+    #hud-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      transition: opacity 0.28s ease;
+      opacity: var(--hud-opacity);
+    }
+
+    body.aim-fading #hud-layer .movable-panel {
+      opacity: 0.16 !important;
+      transition: opacity 0.25s ease;
+    }
+
+    /* Top Command Bar */
+    #top-bar {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 12px;
+      background: rgba(18, 14, 12, 0.9);
+      border: 1px solid var(--panel-border);
+      border-radius: 999px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.58);
+      pointer-events: auto;
+      max-width: 96vw;
+      overflow-x: auto;
+    }
+
+    .brand-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--brass-bright);
+      padding: 0 10px 0 6px;
+      border-right: 1px solid rgba(200, 164, 100, 0.22);
+      white-space: nowrap;
+    }
+
+    .bar-divider {
+      width: 1px;
+      height: 18px;
+      background: rgba(200, 164, 100, 0.2);
+      margin: 0 2px;
+    }
+
+    .top-btn {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--cream);
+      border: 1px solid rgba(200, 164, 100, 0.22);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+
+    .top-btn:hover, .top-btn.active {
+      background: rgba(200, 164, 100, 0.22);
+      border-color: var(--brass-bright);
+      color: #fff;
+    }
+
+    /* Movable Panels */
+    .movable-panel {
+      position: fixed;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+      pointer-events: auto;
+      transition: opacity 0.22s ease, border-color 0.2s ease;
+    }
+
+    .movable-panel.hidden-panel {
+      display: none !important;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px;
+      border-bottom: 1px solid rgba(200, 164, 100, 0.14);
+      font-size: 0.67rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      cursor: grab;
+    }
+
+    .panel-header:active {
+      cursor: grabbing;
+    }
+
+    .drag-grip {
+      color: var(--brass);
+      font-size: 0.85rem;
+      margin-right: 6px;
+    }
+
+    /* Player Cards */
+    #p1-panel {
+      top: 72px;
+      left: 20px;
+      width: 250px;
+    }
+
+    #p2-panel {
+      top: 72px;
+      right: 20px;
+      width: 250px;
+    }
+
+    .player-card-active {
+      border-color: var(--brass-bright) !important;
+      box-shadow: 0 0 24px rgba(200, 164, 100, 0.25), 0 14px 36px rgba(0, 0, 0, 0.6);
+    }
+
+    .player-body {
+      padding: 10px 14px 12px;
+    }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      gap: 6px;
+    }
+
+    .player-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--cream);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .group-badge {
+      font-size: 0.64rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 99px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: rgba(200, 164, 100, 0.15);
+      color: var(--brass-bright);
+      border: 1px solid rgba(200, 164, 100, 0.35);
+      white-space: nowrap;
+    }
+
+    .ball-rack {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      min-height: 22px;
+    }
+
+    .mini-ball {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.62rem;
+      font-weight: 700;
+      color: #111;
+      background: #e5e5e5;
+      box-shadow: inset -2px -2px 4px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.5);
+      transition: transform 0.2s, opacity 0.2s;
+    }
+
+    .mini-ball.pocketed {
+      opacity: 0.2;
+      transform: scale(0.82);
+      filter: grayscale(80%);
+    }
+
+    /* Center Status & Telemetry Banner */
+    #status-panel {
+      top: 72px;
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 300px;
+      max-width: 450px;
+      text-align: center;
+    }
+
+    #status-main {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--brass-bright);
+      padding: 8px 16px 2px;
+    }
+
+    #status-sub {
+      font-size: 0.74rem;
+      color: var(--muted);
+      padding: 0 16px 8px;
+    }
+
+    .telemetry-strip {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      padding: 5px 12px 7px;
+      border-top: 1px solid rgba(200, 164, 100, 0.12);
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    .telemetry-strip strong {
+      color: var(--cream);
+      font-weight: 600;
+    }
+
+    /* Spin & Elevation Panel */
+    #spin-panel {
+      bottom: 22px;
+      left: 20px;
+      width: 235px;
+    }
+
+    .spin-body {
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #spin-pad {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #ffffff 0%, #ece4d5 65%, #b8ad9e 100%);
+      border: 2px solid var(--brass);
+      position: relative;
+      cursor: crosshair;
+      box-shadow: inset 0 4px 10px rgba(0,0,0,0.35), 0 4px 14px rgba(0,0,0,0.45);
+    }
+
+    #spin-pad::before, #spin-pad::after {
+      content: '';
+      position: absolute;
+      background: rgba(0, 0, 0, 0.14);
+      pointer-events: none;
+    }
+
+    #spin-pad::before {
+      top: 50%;
+      left: 10%;
+      right: 10%;
+      height: 1px;
+    }
+
+    #spin-pad::after {
+      left: 50%;
+      top: 10%;
+      bottom: 10%;
+      width: 1px;
+    }
+
+    #spin-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--danger);
+      border: 2px solid #fff;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
+
+    .elev-control {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .elev-label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: var(--cream);
+    }
+
+    .elev-val {
+      color: var(--brass-bright);
+      font-weight: 700;
+    }
+
+    .elev-val.jump-active {
+      color: #60a5fa;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--brass);
+      cursor: pointer;
+    }
+
+    .mini-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(200,164,100,0.3);
+      color: var(--cream);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .mini-btn:hover {
+      background: rgba(200,164,100,0.22);
+    }
+
+    /* Power Meter Panel */
+    #power-panel {
+      bottom: 22px;
+      right: 20px;
+      width: 92px;
+    }
+
+    .power-body {
+      padding: 12px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #power-track {
+      width: 28px;
+      height: 155px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(200, 164, 100, 0.35);
+      border-radius: 99px;
+      position: relative;
+      overflow: hidden;
+      cursor: ns-resize;
+    }
+
+    #power-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 0%;
+      background: linear-gradient(to top, #52b788 0%, #e9c46a 55%, #e76f51 100%);
+      transition: height 0.04s linear;
+    }
+
+    #power-pct {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--brass-bright);
+    }
+
+    /* UI Visibility Popover */
+    #ui-popover {
+      position: fixed;
+      top: 62px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 290px;
+      background: rgba(18, 14, 12, 0.96);
+      border: 1px solid var(--brass);
+      border-radius: 14px;
+      padding: 14px 16px;
+      z-index: 35;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 18px 42px rgba(0,0,0,0.75);
+      display: none;
+      pointer-events: auto;
+    }
+
+    #ui-popover.open {
+      display: block;
+    }
+
+    .popover-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--brass-bright);
+      margin-bottom: 10px;
+      border-bottom: 1px solid rgba(200,164,100,0.2);
+      padding-bottom: 5px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      padding: 5px 0;
+      color: var(--cream);
+      cursor: pointer;
+    }
+
+    /* Modals & Tabbed Lounge Menu */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(8, 6, 5, 0.8);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      pointer-events: auto;
+    }
+
+    .modal-backdrop.hidden {
+      display: none !important;
+    }
+
+    .modal-card {
+      width: 100%;
+      max-width: 560px;
+      max-height: 90vh;
+      overflow-y: auto;
+      background: linear-gradient(160deg, rgba(28, 22, 18, 0.97) 0%, rgba(14, 11, 9, 0.99) 100%);
+      border: 1px solid var(--brass);
+      border-radius: 18px;
+      padding: 26px 28px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
+    }
+
+    .modal-header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .modal-subtitle {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--brass);
+      margin-bottom: 2px;
+    }
+
+    .modal-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--cream);
+      line-height: 1.1;
+    }
+
+    .close-icon-btn {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(200,164,100,0.3);
+      color: var(--cream);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .close-icon-btn:hover {
+      background: rgba(200,164,100,0.22);
+    }
+
+    /* Menu Navigation Tabs */
+    .menu-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 18px;
+      border-bottom: 1px solid rgba(200, 164, 100, 0.2);
+      padding-bottom: 10px;
+    }
+
+    .menu-tab-btn {
+      flex: 1;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(200, 164, 100, 0.2);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 0.76rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+
+    .menu-tab-btn.active, .menu-tab-btn:hover {
+      background: rgba(200, 164, 100, 0.22);
+      border-color: var(--brass-bright);
+      color: var(--cream);
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-row-2col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .text-input {
+      width: 100%;
+      padding: 8px 11px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(200, 164, 100, 0.3);
+      border-radius: 8px;
+      color: var(--cream);
+      font-family: inherit;
+      font-size: 0.82rem;
+      outline: none;
+    }
+
+    .text-input:focus {
+      border-color: var(--brass-bright);
+    }
+
+    .seg-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .seg-btn {
+      flex: 1;
+      min-width: 80px;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(200, 164, 100, 0.25);
+      border-radius: 8px;
+      color: var(--cream);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s;
+      text-align: center;
+    }
+
+    .seg-btn.active, .seg-btn:hover {
+      background: rgba(200, 164, 100, 0.25);
+      border-color: var(--brass-bright);
+      color: #fff;
+    }
+
+    .rules-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 0.78rem;
+      color: var(--cream);
+      line-height: 1.5;
+    }
+
+    .rule-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(200, 164, 100, 0.18);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .rule-box strong {
+      color: var(--brass-bright);
+      display: block;
+      margin-bottom: 3px;
+      font-size: 0.8rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 14px 0 18px;
+    }
+
+    .stat-box {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(200, 164, 100, 0.2);
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--brass-bright);
+    }
+
+    .stat-lbl {
+      font-size: 0.66rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(200, 164, 100, 0.16);
+    }
+
+    .primary-btn {
+      flex: 1;
+      padding: 12px 18px;
+      background: linear-gradient(135deg, #d4b272 0%, #a88242 100%);
+      color: #120e0a;
+      font-weight: 700;
+      font-size: 0.85rem;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      transition: transform 0.15s, filter 0.15s;
+    }
+
+    .primary-btn:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+
+    .secondary-btn {
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--cream);
+      border: 1px solid rgba(200, 164, 100, 0.35);
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.83rem;
+      cursor: pointer;
+    }
+
+    .secondary-btn:hover {
+      background: rgba(200, 164, 100, 0.16);
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="vignette"></div>
+
+  <!-- Top Navigation & Command Bar -->
+  <div id="top-bar">
+    <span class="brand-title">The Billiard Room</span>
+    <button class="top-btn active" id="cam-aim-btn" title="Low Aiming Perspective (Key: 1)">Cue View</button>
+    <button class="top-btn" id="cam-orbit-btn" title="Free 3D Orbit Camera (Key: 2)">Orbit View</button>
+    <button class="top-btn" id="cam-top-btn" title="Overhead Bird's-Eye View (Key: 3)">Top View</button>
+    <div class="bar-divider"></div>
+    <button class="top-btn" id="quick-rerack-btn" title="Rack a fresh frame immediately">Rerack</button>
+    <button class="top-btn" id="ui-popover-btn" title="Show/Hide & Reset Movable UI Panels">UI Layout</button>
+    <button class="top-btn" id="mute-btn" title="Toggle Sound Effects (Key: M)">Sound: On</button>
+    <button class="top-btn" id="open-menu-btn" title="Open Lounge Settings & Rules (Key: Esc)">Lounge Menu</button>
+  </div>
+
+  <!-- UI Visibility & Opacity Popover -->
+  <div id="ui-popover">
+    <div class="popover-title">HUD Panels & Visibility</div>
+    <label class="toggle-row">
+      <span>Player 1 Card</span>
+      <input type="checkbox" id="tog-p1" checked />
+    </label>
+    <label class="toggle-row">
+      <span>Player 2 / AI Card</span>
+      <input type="checkbox" id="tog-p2" checked />
+    </label>
+    <label class="toggle-row">
+      <span>Turn & Telemetry Banner</span>
+      <input type="checkbox" id="tog-status" checked />
+    </label>
+    <label class="toggle-row">
+      <span>Spin & Elevation Pad</span>
+      <input type="checkbox" id="tog-spin" checked />
+    </label>
+    <label class="toggle-row">
+      <span>Stroke Power Meter</span>
+      <input type="checkbox" id="tog-power" checked />
+    </label>
+    <label class="toggle-row">
+      <span>Auto-Fade When Aiming</span>
+      <input type="checkbox" id="tog-autofade" checked />
+    </label>
+    <div class="form-group" style="margin-top:8px;margin-bottom:8px;">
+      <div class="elev-label-row">
+        <span>HUD Opacity</span>
+        <span id="hud-opacity-label">95%</span>
+      </div>
+      <input type="range" id="hud-opacity-slider" min="35" max="100" value="95" />
+    </div>
+    <button class="mini-btn" id="reset-hud-btn" style="width:100%;margin-top:4px;padding:7px;">Reset Panel Positions</button>
+  </div>
+
+  <!-- Movable HUD Layer -->
+  <div id="hud-layer">
+    <!-- Player 1 Panel -->
+    <div class="movable-panel player-card-active" id="p1-panel">
+      <div class="panel-header"><span class="drag-grip">⠿</span><span>Player One</span></div>
+      <div class="player-body">
+        <div class="player-row">
+          <span class="player-name" id="p1-name">Player 1</span>
+          <span class="group-badge" id="p1-group">OPEN TABLE</span>
+        </div>
+        <div class="ball-rack" id="p1-rack"></div>
+      </div>
+    </div>
+
+    <!-- Center Status & Telemetry Toast Panel -->
+    <div class="movable-panel" id="status-panel">
+      <div class="panel-header"><span class="drag-grip">⠿</span><span id="mode-header-label">Match Status • vs. AI</span></div>
+      <div id="status-main">Opening Break Shot</div>
+      <div id="status-sub">Drag on the table to aim • Pull power bar or hold Spacebar to strike</div>
+      <div class="telemetry-strip">
+        <span>Inning: <strong id="tel-inning">1</strong></span>
+        <span>Balls Left: <strong id="tel-balls">15</strong></span>
+        <span>Elevation: <strong id="tel-elev">0°</strong></span>
+      </div>
+    </div>
+
+    <!-- Player 2 / AI Panel -->
+    <div class="movable-panel" id="p2-panel">
+      <div class="panel-header"><span class="drag-grip">⠿</span><span>Opponent</span></div>
+      <div class="player-body">
+        <div class="player-row">
+          <span class="player-name" id="p2-name">Club Hustler AI</span>
+          <span class="group-badge" id="p2-group">OPEN TABLE</span>
+        </div>
+        <div class="ball-rack" id="p2-rack"></div>
+      </div>
+    </div>
+
+    <!-- Cue Tip English & Negative/Positive Butt Elevation -->
+    <div class="movable-panel" id="spin-panel">
+      <div class="panel-header"><span class="drag-grip">⠿</span><span>Cue Tip & Elevation</span></div>
+      <div class="spin-body">
+        <div id="spin-pad" title="Drag to set Top/Back/Side English spin">
+          <div id="spin-dot"></div>
+        </div>
+        <div class="elev-control">
+          <div class="elev-label-row">
+            <span>Butt Elevation</span>
+            <span class="elev-val" id="elev-label">0° Level</span>
+          </div>
+          <input type="range" id="elev-slider" min="-25" max="25" step="1" value="0" />
+        </div>
+        <button class="mini-btn" id="reset-spin-btn">Center Tip & 0° Level</button>
+      </div>
+    </div>
+
+    <!-- Stroke Power Meter -->
+    <div class="movable-panel" id="power-panel">
+      <div class="panel-header"><span class="drag-grip">⠿</span><span>Power</span></div>
+      <div class="power-body">
+        <div id="power-track" title="Drag down and release to strike">
+          <div id="power-fill"></div>
+        </div>
+        <div id="power-pct">0%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabbed Main Lounge Menu Modal -->
+  <div class="modal-backdrop" id="main-menu-modal">
+    <div class="modal-card">
+      <div class="modal-header-row">
+        <div>
+          <div class="modal-subtitle">Heritage Billiards Club</div>
+          <div class="modal-title">The Billiard Room</div>
+        </div>
+        <button class="close-icon-btn" id="close-menu-x" title="Return to Table">✕</button>
+      </div>
+
+      <!-- Modal Navigation Tabs -->
+      <div class="menu-tabs">
+        <button class="menu-tab-btn active" data-tab="tab-match">Match Setup</button>
+        <button class="menu-tab-btn" data-tab="tab-table">Table & Controls</button>
+        <button class="menu-tab-btn" data-tab="tab-rules">Rules & Guide</button>
+      </div>
+
+      <!-- TAB 1: MATCH SETUP -->
+      <div class="tab-pane active" id="tab-match">
+        <div class="form-group">
+          <span class="form-label">Game Mode</span>
+          <div class="seg-group" id="mode-seg">
+            <button class="seg-btn active" data-mode="AI">1v1 vs. AI Bot</button>
+            <button class="seg-btn" data-mode="LOCAL">2-Player Pass & Play</button>
+            <button class="seg-btn" data-mode="PRACTICE">Solo Practice</button>
+          </div>
+        </div>
+
+        <div class="form-group" id="ai-diff-group">
+          <span class="form-label">AI Bot Difficulty</span>
+          <div class="seg-group" id="diff-seg">
+            <button class="seg-btn" data-diff="ROOKIE">Rookie (±3.2°)</button>
+            <button class="seg-btn active" data-diff="HUSTLER">Club Hustler (±1.0°)</button>
+            <button class="seg-btn" data-diff="SHARK">Pro Shark (±0.1°)</button>
+          </div>
+        </div>
+
+        <div class="form-row-2col">
+          <div>
+            <label class="form-label" for="p1-name-input">Player 1 Name</label>
+            <input class="text-input" id="p1-name-input" type="text" maxlength="18" value="Player 1" />
+          </div>
+          <div id="p2-name-wrap">
+            <label class="form-label" for="p2-name-input">Player 2 Name</label>
+            <input class="text-input" id="p2-name-input" type="text" maxlength="18" value="Player 2" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <span class="form-label">Tournament Baize Felt</span>
+          <div class="seg-group" id="felt-seg">
+            <button class="seg-btn active" data-felt="green">Baize Green</button>
+            <button class="seg-btn" data-felt="blue">TV Blue</button>
+            <button class="seg-btn" data-felt="burgundy">Burgundy</button>
+            <button class="seg-btn" data-felt="obsidian">Obsidian</button>
+            <button class="seg-btn" data-felt="camel">Warm Camel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: TABLE & CONTROLS SETTINGS -->
+      <div class="tab-pane" id="tab-table">
+        <div class="form-group">
+          <span class="form-label">Aiming Guide Style</span>
+          <div class="seg-group" id="guide-style-seg">
+            <button class="seg-btn active" data-style="FULL">Full Ghost + Tangent</button>
+            <button class="seg-btn" data-style="BASIC">Main Line Only</button>
+            <button class="seg-btn" data-style="NONE">Pro (No Guides)</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <span class="form-label">Cloth Roll Speed</span>
+          <div class="seg-group" id="cloth-speed-seg">
+            <button class="seg-btn" data-speed="SLOW">Slow Lounge</button>
+            <button class="seg-btn active" data-speed="NORMAL">Regulation</button>
+            <button class="seg-btn" data-speed="FAST">Fast Pro Worsted</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="elev-label-row">
+            <span class="form-label" style="margin:0;">Aiming Guide Length</span>
+            <span id="guide-len-label" style="font-size:0.75rem;color:var(--brass-bright);">100%</span>
+          </div>
+          <input type="range" id="guide-len-slider" min="25" max="100" value="100" />
+        </div>
+
+        <div class="form-group">
+          <div class="elev-label-row">
+            <span class="form-label" style="margin:0;">Aim Drag Sensitivity</span>
+            <span id="aim-sens-label" style="font-size:0.75rem;color:var(--brass-bright);">100%</span>
+          </div>
+          <input type="range" id="aim-sens-slider" min="40" max="180" value="100" />
+        </div>
+
+        <div class="form-group">
+          <div class="elev-label-row">
+            <span class="form-label" style="margin:0;">Master Audio Volume</span>
+            <span id="audio-vol-label" style="font-size:0.75rem;color:var(--brass-bright);">85%</span>
+          </div>
+          <input type="range" id="audio-vol-slider" min="0" max="100" value="85" />
+        </div>
+      </div>
+
+      <!-- TAB 3: RULES & GUIDE -->
+      <div class="tab-pane" id="tab-rules">
+        <div class="rules-list">
+          <div class="rule-box">
+            <strong>Official 8-Ball Rules</strong>
+            The table starts <em>Open</em> on the break. The first player to legally pocket a Solid (1–7) or Stripe (9–15) claims that group. Once all 7 balls of your group are cleared, legally pocket the 8-Ball to win. Hitting the wrong group first, failing to contact any ball, or scratching grants the opponent <strong>Ball-in-Hand</strong>.
+          </div>
+          <div class="rule-box">
+            <strong>3D Jump Shots (Negative Butt Elevation)</strong>
+            Slide <strong>Butt Elevation</strong> into negative degrees (<strong>-25° to -4°</strong>) to angle the cue downward into the upper hemisphere of the cue ball. A blue <strong>3D Parabolic Jump Arc</strong> previews where the airborne cue ball will hop and land.
+          </div>
+          <div class="rule-box">
+            <strong>Camera Perspectives & Overhead 360° Aiming</strong>
+            Switch between <strong>Cue View</strong>, <strong>Orbit View</strong>, and <strong>Top View</strong> (or press <strong>V</strong>). In <strong>Top View</strong>, the overhead lamp automatically hides and you can drag in a 360° circle around the cue ball—or tap any ball/pocket—to aim directly at it.
+          </div>
+          <div class="rule-box">
+            <strong>Keyboard & Fine-Aim Shortcuts</strong>
+            Hold <strong>Shift</strong> while dragging (or use <strong>←/→</strong> & <strong>A/D</strong>) for micro-angle adjustments. Hold and release <strong>Spacebar</strong> to charge and strike. Press <strong>Esc</strong> for this menu.
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="primary-btn" id="new-rack-btn">Start New Rack</button>
+        <button class="secondary-btn" id="resume-game-btn">Return to Table</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over & Match Statistics Modal -->
+  <div class="modal-backdrop hidden" id="gameover-modal">
+    <div class="modal-card" style="text-align:center;">
+      <div class="modal-subtitle">Match Concluded</div>
+      <div class="modal-title" id="winner-title">Player 1 Wins!</div>
+      <p id="winner-reason" style="color:var(--muted);font-size:0.88rem;margin:8px 0 14px;">Legally pocketed the 8-Ball.</p>
+
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-val" id="stat-innings">1</div>
+          <div class="stat-lbl">Total Innings</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="stat-potted">0</div>
+          <div class="stat-lbl">Balls Potted</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="stat-fouls">0</div>
+          <div class="stat-lbl">Match Fouls</div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="primary-btn" id="play-again-btn">Rack Another Frame</button>
+        <button class="secondary-btn" id="gameover-menu-btn">Lounge Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // =========================================================================
+    // 1. CONSTANTS & REGULATION TABLE DIMENSIONS
+    // =========================================================================
+    const PLAY_W = 2.54;               // 9-foot regulation length along X (meters)
+    const PLAY_L = 1.27;               // 9-foot regulation width along Z (meters)
+    const BALL_R = 0.0285;             // 57mm regulation ball radius
+    const BALL_D = BALL_R * 2;
+    const SUBSTEPS = 10;               // 10 physics substeps per frame
+    const GRAVITY = 9.81;
+    const MAX_SHOT_SPEED = 4.95;
+
+    const FELT_PALETTES = {
+      green:    '#145235',
+      blue:     '#163f63',
+      burgundy: '#541822',
+      obsidian: '#22262e',
+      camel:    '#5c472c'
+    };
+
+    const CLOTH_DECEL_RATES = {
+      SLOW:   0.195,
+      NORMAL: 0.145,
+      FAST:   0.105
+    };
+
+    const POCKETS = [
+      { id: 0, x: -PLAY_W / 2, z: -PLAY_L / 2, r: 0.068, isCorner: true },
+      { id: 1, x:  0,          z: -PLAY_L / 2 - 0.012, r: 0.064, isCorner: false },
+      { id: 2, x:  PLAY_W / 2, z: -PLAY_L / 2, r: 0.068, isCorner: true },
+      { id: 3, x: -PLAY_W / 2, z:  PLAY_L / 2, r: 0.068, isCorner: true },
+      { id: 4, x:  0,          z:  PLAY_L / 2 + 0.012, r: 0.064, isCorner: false },
+      { id: 5, x:  PLAY_W / 2, z:  PLAY_L / 2, r: 0.068, isCorner: true }
+    ];
+
+    // =========================================================================
+    // 2. GAME & SETTINGS STATE
+    // =========================================================================
+    const userSettings = {
+      gameMode: 'AI',          // 'AI' | 'LOCAL' | 'PRACTICE'
+      aiDifficulty: 'HUSTLER', // 'ROOKIE' | 'HUSTLER' | 'SHARK'
+      p1CustomName: 'Player 1',
+      p2CustomName: 'Player 2',
+      feltColor: 'green',
+      guideStyle: 'FULL',      // 'FULL' | 'BASIC' | 'NONE'
+      clothSpeed: 'NORMAL',    // 'SLOW' | 'NORMAL' | 'FAST'
+      guideLength: 1.0,
+      aimSensitivity: 1.0,
+      masterVolume: 0.85,
+      muted: false,
+      autoFadeHud: true
+    };
+
+    let gameState = 'AIMING'; // 'AIMING' | 'STRIKING' | 'SIMULATING' | 'AI_THINKING' | 'GAME_OVER'
+    let currentPlayer = 0;    // 0 = Player 1, 1 = Player 2 / AI
+    let tableGroupState = 'OPEN'; // 'OPEN' | 'ASSIGNED'
+    let playerGroups = [null, null]; // 'SOLIDS' | 'STRIPES'
+    let isOpeningBreak = true;
+
+    let matchStats = {
+      innings: 1,
+      totalPotted: 0,
+      totalFouls: 0
+    };
+
+    let aimAngle = Math.PI / 2;
+    let cueSpinX = 0;
+    let cueSpinY = 0;
+    let cueElevationDeg = 0;
+    let shotPower = 0;
+    let strokeAnimPhase = 0;
+    let pendingStrikePower = 0;
+
+    let cameraMode = 'aim';      // 'aim' | 'orbit' | 'top'
+    let isAimDraggingOnTable = false;
+    let lastPointerX = 0;
+    let lastDragRadialAngle = 0;
+    let isChargingPower = false;
+    let powerDragStartY = 0;
+    let isDraggingCueBall = false;
+
+    const shotTurnLog = {
+      firstHitBall: null,
+      pocketedBalls: [],
+      cueScratch: false,
+      railContacts: 0
+    };
+
+    // =========================================================================
+    // 3. PROCEDURAL WEB AUDIO SYNTHESIS ENGINE
+    // =========================================================================
+    class BilliardAudioEngine {
+      constructor() {
+        this.ctx = null;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      effectiveVolume() {
+        return userSettings.muted ? 0 : userSettings.masterVolume;
+      }
+
+      playBallHit(relSpeed) {
+        const volScale = this.effectiveVolume();
+        if (volScale <= 0) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const gainVal = Math.min(0.85, Math.max(0.03, relSpeed * 0.22)) * volScale;
+        const now = this.ctx.currentTime;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        const baseFreq = 1650 + Math.min(600, relSpeed * 110);
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(340, now + 0.045);
+
+        gain.gain.setValueAtTime(gainVal, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.055);
+      }
+
+      playCueStrike(power) {
+        const volScale = this.effectiveVolume();
+        if (volScale <= 0) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(320 + power * 240, now);
+        osc.frequency.exponentialRampToValueAtTime(95, now + 0.065);
+
+        gain.gain.setValueAtTime((0.18 + power * 0.45) * volScale, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.075);
+      }
+
+      playRailThud(speed) {
+        const volScale = this.effectiveVolume();
+        if (volScale <= 0) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(135, now);
+        osc.frequency.exponentialRampToValueAtTime(48, now + 0.085);
+
+        const vol = Math.min(0.45, Math.max(0.02, speed * 0.14)) * volScale;
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.095);
+      }
+
+      playPocketDrop() {
+        const volScale = this.effectiveVolume();
+        if (volScale <= 0) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        [0, 0.07].forEach((offset, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(idx === 0 ? 210 : 155, now + offset);
+          osc.frequency.exponentialRampToValueAtTime(62, now + offset + 0.11);
+
+          gain.gain.setValueAtTime(0.24 * volScale, now + offset);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.12);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + offset);
+          osc.stop(now + offset + 0.13);
+        });
+      }
+    }
+
+    const audio = new BilliardAudioEngine();
+
+    // =========================================================================
+    // 4. THREE.JS SCENE, RENDERER & DAMPED CAMERA RIG
+    // =========================================================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0c0908);
+    scene.fog = new THREE.FogExp2(0x0c0908, 0.11);
+
+    const camera = new THREE.PerspectiveCamera(44, window.innerWidth / window.innerHeight, 0.04, 30);
+    camera.position.set(-1.85, 0.72, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    container.appendChild(renderer.domElement);
+
+    const orbitControls = new OrbitControls(camera, renderer.domElement);
+    orbitControls.enableDamping = true;
+    orbitControls.dampingFactor = 0.08;
+    orbitControls.maxPolarAngle = Math.PI / 2 - 0.05;
+    orbitControls.minDistance = 0.45;
+    orbitControls.maxDistance = 4.2;
+    orbitControls.enabled = false;
+
+    const camRig = {
+      currentPos: new THREE.Vector3(-1.85, 0.72, 0),
+      targetPos: new THREE.Vector3(-1.85, 0.72, 0),
+      currentLook: new THREE.Vector3(0, 0, 0),
+      targetLook: new THREE.Vector3(0, 0, 0)
+    };
+
+    const raycaster = new THREE.Raycaster();
+    const pointerNDC = new THREE.Vector2();
+    const tablePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -BALL_R);
+
+    // =========================================================================
+    // 5. PROCEDURAL TEXTURES & REGULATION 3D TABLE WITH CUT-OUT POCKETS
+    // =========================================================================
+    let feltMaterial = null;
+    let overheadLampGroup = null;
+    let dustParticles = null;
+    const cushionSegments = [];
+    const jawCorners = [];
+
+    function createProceduralFeltTexture(hexColor) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = hexColor;
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Subtle worsted wool weave noise
+      const imgData = ctx.getImageData(0, 0, 512, 512);
+      const data = imgData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const grain = (Math.random() - 0.5) * 10;
+        data[i]     = Math.min(255, Math.max(0, data[i] + grain));
+        data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + grain));
+        data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + grain));
+      }
+      ctx.putImageData(imgData, 0, 0);
+
+      // Head string line
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.13)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(128, 0);
+      ctx.lineTo(128, 512);
+      ctx.stroke();
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.anisotropy = 8;
+      return tex;
+    }
+
+    function createMahoganyWoodTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 512, 256);
+      grad.addColorStop(0, '#2b130b');
+      grad.addColorStop(0.5, '#3b1b10');
+      grad.addColorStop(1, '#240f08');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 256);
+
+      ctx.strokeStyle = 'rgba(15, 5, 2, 0.28)';
+      for (let i = 0; i < 90; i++) {
+        ctx.lineWidth = 1 + Math.random() * 2.2;
+        ctx.beginPath();
+        const y = Math.random() * 256;
+        ctx.moveTo(0, y);
+        ctx.bezierCurveTo(170, y + (Math.random() - 0.5) * 18, 340, y + (Math.random() - 0.5) * 18, 512, y);
+        ctx.stroke();
+      }
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
+    function buildRegulationTable() {
+      const tableGroup = new THREE.Group();
+
+      // Lighting
+      const ambient = new THREE.AmbientLight(0xf5e6d3, 0.58);
+      scene.add(ambient);
+
+      const hemiLight = new THREE.HemisphereLight(0xffe8c2, 0x1a120b, 0.55);
+      scene.add(hemiLight);
+
+      const mainSpot = new THREE.SpotLight(0xfff1d6, 4.8);
+      mainSpot.position.set(0, 2.05, 0);
+      mainSpot.angle = Math.PI / 2.35;
+      mainSpot.penumbra = 0.65;
+      mainSpot.decay = 1.1;
+      mainSpot.distance = 7.5;
+      mainSpot.castShadow = true;
+      mainSpot.shadow.mapSize.width = 2048;
+      mainSpot.shadow.mapSize.height = 2048;
+      mainSpot.shadow.bias = -0.0004;
+      scene.add(mainSpot);
+
+      // Materials
+      feltMaterial = new THREE.MeshStandardMaterial({
+        map: createProceduralFeltTexture(FELT_PALETTES[userSettings.feltColor]),
+        roughness: 0.86,
+        metalness: 0.02
+      });
+
+      const woodMat = new THREE.MeshStandardMaterial({
+        map: createMahoganyWoodTexture(),
+        roughness: 0.28,
+        metalness: 0.08
+      });
+
+      const brassMat = new THREE.MeshStandardMaterial({
+        color: 0xc8a464,
+        roughness: 0.24,
+        metalness: 0.86
+      });
+
+      const leatherJawMat = new THREE.MeshStandardMaterial({
+        color: 0x1b120e,
+        roughness: 0.65,
+        metalness: 0.08
+      });
+
+      const pocketWellMat = new THREE.MeshStandardMaterial({
+        color: 0x070606,
+        roughness: 0.92,
+        side: THREE.DoubleSide
+      });
+
+      // 1. Extruded Slate Bed with 6 Real Cut-Out Circular Pocket Holes
+      const bedShape = new THREE.Shape();
+      const bw = PLAY_W / 2 + 0.085;
+      const bl = PLAY_L / 2 + 0.085;
+      bedShape.moveTo(-bw, -bl);
+      bedShape.lineTo(bw, -bl);
+      bedShape.lineTo(bw, bl);
+      bedShape.lineTo(-bw, bl);
+      bedShape.closePath();
+
+      POCKETS.forEach(p => {
+        const holePath = new THREE.Path();
+        const cutR = p.isCorner ? p.r * 0.96 : p.r * 0.94;
+        holePath.absarc(p.x, -p.z, cutR, 0, Math.PI * 2, true);
+        bedShape.holes.push(holePath);
+      });
+
+      const bedGeo = new THREE.ExtrudeGeometry(bedShape, {
+        depth: 0.045,
+        bevelEnabled: false,
+        curveSegments: 32
+      });
+      bedGeo.rotateX(-Math.PI / 2);
+      bedGeo.translate(0, -0.045, 0);
+      const bedMesh = new THREE.Mesh(bedGeo, feltMaterial);
+      bedMesh.receiveShadow = true;
+      tableGroup.add(bedMesh);
+
+      // Foot Spot Decal
+      const spotGeo = new THREE.CircleGeometry(0.011, 20);
+      spotGeo.rotateX(-Math.PI / 2);
+      const spotMat = new THREE.MeshBasicMaterial({ color: 0xd8cfc2, transparent: true, opacity: 0.55 });
+      const footSpot = new THREE.Mesh(spotGeo, spotMat);
+      footSpot.position.set(PLAY_W * 0.25, 0.0006, 0);
+      tableGroup.add(footSpot);
+
+      // 2. Recessed Pocket Chutes & Outer-Only Leather/Brass Hoods
+      POCKETS.forEach(p => {
+        const holeR = p.isCorner ? p.r * 0.95 : p.r * 0.92;
+        const chuteGeo = new THREE.CylinderGeometry(holeR, holeR * 0.78, 0.24, 28, 1, true);
+        const chute = new THREE.Mesh(chuteGeo, pocketWellMat);
+        chute.position.set(p.x, -0.121, p.z);
+        tableGroup.add(chute);
+
+        const bottomCap = new THREE.Mesh(new THREE.CircleGeometry(holeR * 0.78, 24), pocketWellMat);
+        bottomCap.rotation.x = -Math.PI / 2;
+        bottomCap.position.set(p.x, -0.24, p.z);
+        tableGroup.add(bottomCap);
+
+        const jawAngle = Math.atan2(p.z, p.x);
+        const hoodGeo = new THREE.TorusGeometry(holeR + 0.013, 0.014, 12, 24, Math.PI);
+        const hood = new THREE.Mesh(hoodGeo, leatherJawMat);
+        hood.rotation.x = Math.PI / 2;
+        hood.rotation.z = jawAngle - Math.PI / 2;
+        hood.position.set(p.x, 0.014, p.z);
+        tableGroup.add(hood);
+
+        const brassRimGeo = new THREE.TorusGeometry(holeR + 0.025, 0.006, 10, 24, Math.PI);
+        const brassRim = new THREE.Mesh(brassRimGeo, brassMat);
+        brassRim.rotation.x = Math.PI / 2;
+        brassRim.rotation.z = jawAngle - Math.PI / 2;
+        brassRim.position.set(p.x, 0.024, p.z);
+        tableGroup.add(brassRim);
+      });
+
+      // 3. Six Beveled Cushion Segments & Physics Boundaries
+      const cGapCorner = 0.078;
+      const cGapSide = 0.068;
+      const cushionDefs = [
+        { x1: -PLAY_W / 2 + cGapCorner, z1: -PLAY_L / 2, x2: -cGapSide, z2: -PLAY_L / 2, nx: 0, nz: 1 },
+        { x1:  cGapSide, z1: -PLAY_L / 2, x2:  PLAY_W / 2 - cGapCorner, z2: -PLAY_L / 2, nx: 0, nz: 1 },
+        { x1: -PLAY_W / 2 + cGapCorner, z1:  PLAY_L / 2, x2: -cGapSide, z2:  PLAY_L / 2, nx: 0, nz: -1 },
+        { x1:  cGapSide, z1:  PLAY_L / 2, x2:  PLAY_W / 2 - cGapCorner, z2:  PLAY_L / 2, nx: 0, nz: -1 },
+        { x1: -PLAY_W / 2, z1: -PLAY_L / 2 + cGapCorner, x2: -PLAY_W / 2, z2:  PLAY_L / 2 - cGapCorner, nx: 1, nz: 0 },
+        { x1:  PLAY_W / 2, z1: -PLAY_L / 2 + cGapCorner, x2:  PLAY_W / 2, z2:  PLAY_L / 2 - cGapCorner, nx: -1, nz: 0 }
+      ];
+
+      cushionDefs.forEach(def => {
+        cushionSegments.push(def);
+        jawCorners.push({ x: def.x1, z: def.z1 }, { x: def.x2, z: def.z2 });
+
+        const len = Math.hypot(def.x2 - def.x1, def.z2 - def.z1);
+        const cx = (def.x1 + def.x2) / 2 - def.nx * 0.022;
+        const cz = (def.z1 + def.z2) / 2 - def.nz * 0.022;
+        const cGeo = new THREE.BoxGeometry(
+          Math.abs(def.nx) > 0 ? 0.044 : len,
+          0.039,
+          Math.abs(def.nz) > 0 ? 0.044 : len
+        );
+        const cMesh = new THREE.Mesh(cGeo, feltMaterial);
+        cMesh.position.set(cx, 0.0195, cz);
+        cMesh.castShadow = true;
+        cMesh.receiveShadow = true;
+        tableGroup.add(cMesh);
+      });
+
+      // 4. Outer Mahogany Cabinets, Rails & 18 Pearl Diamond Sights
+      const railThickness = 0.11;
+      const railHeight = 0.046;
+      const topRailGeo = new THREE.BoxGeometry(PLAY_W + 0.28, railHeight, railThickness);
+      const sideRailGeo = new THREE.BoxGeometry(railThickness, railHeight, PLAY_L + 0.08);
+
+      const northRail = new THREE.Mesh(topRailGeo, woodMat);
+      northRail.position.set(0, railHeight / 2, -PLAY_L / 2 - 0.044 - railThickness / 2);
+      northRail.receiveShadow = true;
+      tableGroup.add(northRail);
+
+      const southRail = new THREE.Mesh(topRailGeo, woodMat);
+      southRail.position.set(0, railHeight / 2, PLAY_L / 2 + 0.044 + railThickness / 2);
+      southRail.receiveShadow = true;
+      tableGroup.add(southRail);
+
+      const westRail = new THREE.Mesh(sideRailGeo, woodMat);
+      westRail.position.set(-PLAY_W / 2 - 0.044 - railThickness / 2, railHeight / 2, 0);
+      westRail.receiveShadow = true;
+      tableGroup.add(westRail);
+
+      const eastRail = new THREE.Mesh(sideRailGeo, woodMat);
+      eastRail.position.set(PLAY_W / 2 + 0.044 + railThickness / 2, railHeight / 2, 0);
+      eastRail.receiveShadow = true;
+      tableGroup.add(eastRail);
+
+      // 18 Inlaid Mother-of-Pearl Diamond Sights
+      const pearlMat = new THREE.MeshStandardMaterial({ color: 0xfaf0dc, roughness: 0.2, metalness: 0.3 });
+      const diamondGeo = new THREE.CylinderGeometry(0.007, 0.007, 0.002, 4);
+      const longStep = PLAY_W / 8;
+      for (let i = -3; i <= 3; i++) {
+        if (i === 0) continue;
+        [-1, 1].forEach(side => {
+          const d = new THREE.Mesh(diamondGeo, pearlMat);
+          d.position.set(i * longStep, railHeight + 0.001, side * (PLAY_L / 2 + 0.044 + railThickness / 2));
+          tableGroup.add(d);
+        });
+      }
+      const shortStep = PLAY_L / 4;
+      for (let i = -1; i <= 1; i++) {
+        if (i === 0) continue;
+        [-1, 1].forEach(side => {
+          const d = new THREE.Mesh(diamondGeo, pearlMat);
+          d.position.set(side * (PLAY_W / 2 + 0.044 + railThickness / 2), railHeight + 0.001, i * shortStep);
+          tableGroup.add(d);
+        });
+      }
+
+      // Apron & Turned Pedestal Legs
+      const apronGeo = new THREE.BoxGeometry(PLAY_W + 0.22, 0.16, PLAY_L + 0.22);
+      const apron = new THREE.Mesh(apronGeo, woodMat);
+      apron.position.set(0, -0.125, 0);
+      tableGroup.add(apron);
+
+      const legGeo = new THREE.CylinderGeometry(0.095, 0.068, 0.62, 20);
+      [[-0.95, -0.45], [0.95, -0.45], [-0.95, 0.45], [0.95, 0.45]].forEach(([lx, lz]) => {
+        const leg = new THREE.Mesh(legGeo, woodMat);
+        leg.position.set(lx, -0.48, lz);
+        tableGroup.add(leg);
+
+        const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.074, 0.082, 0.05, 20), brassMat);
+        foot.position.set(lx, -0.78, lz);
+        tableGroup.add(foot);
+      });
+
+      // Hardwood Lounge Floor & Woven Club Rug
+      const floorGeo = new THREE.PlaneGeometry(14, 14);
+      floorGeo.rotateX(-Math.PI / 2);
+      const floorMat = new THREE.MeshStandardMaterial({ color: 0x120d0a, roughness: 0.65 });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.position.y = -0.805;
+      floor.receiveShadow = true;
+      tableGroup.add(floor);
+
+      const rugGeo = new THREE.PlaneGeometry(3.8, 2.5);
+      rugGeo.rotateX(-Math.PI / 2);
+      const rugMat = new THREE.MeshStandardMaterial({ color: 0x381916, roughness: 0.92 });
+      const rug = new THREE.Mesh(rugGeo, rugMat);
+      rug.position.y = -0.801;
+      rug.receiveShadow = true;
+      tableGroup.add(rug);
+
+      // 5. Three-Shade Overhead Billiard Lamp (Auto-Hidden in Top View)
+      overheadLampGroup = new THREE.Group();
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 1.65, 12), brassMat);
+      bar.rotation.z = Math.PI / 2;
+      bar.position.y = 1.68;
+      overheadLampGroup.add(bar);
+
+      const shadeMat = new THREE.MeshStandardMaterial({
+        color: 0x123f28,
+        roughness: 0.3,
+        metalness: 0.2,
+        side: THREE.DoubleSide
+      });
+      [-0.62, 0, 0.62].forEach(sx => {
+        const shade = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.16, 24, 1, true), shadeMat);
+        shade.position.set(sx, 1.60, 0);
+        overheadLampGroup.add(shade);
+
+        const bulb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.035, 12, 12),
+          new THREE.MeshBasicMaterial({ color: 0xfff5d6 })
+        );
+        bulb.position.set(sx, 1.55, 0);
+        overheadLampGroup.add(bulb);
+      });
+      scene.add(overheadLampGroup);
+
+      // 6. Floating Atmospheric Dust Motes
+      const dustCount = 65;
+      const dustGeo = new THREE.BufferGeometry();
+      const dustPos = new Float32Array(dustCount * 3);
+      for (let i = 0; i < dustCount; i++) {
+        dustPos[i * 3]     = (Math.random() - 0.5) * 2.5;
+        dustPos[i * 3 + 1] = 0.08 + Math.random() * 1.45;
+        dustPos[i * 3 + 2] = (Math.random() - 0.5) * 1.3;
+      }
+      dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+      const dustMat = new THREE.PointsMaterial({
+        color: 0xfde68a,
+        size: 0.008,
+        transparent: true,
+        opacity: 0.24,
+        depthWrite: false
+      });
+      dustParticles = new THREE.Points(dustGeo, dustMat);
+      scene.add(dustParticles);
+
+      scene.add(tableGroup);
+    }
+
+    // =========================================================================
+    // 6. 16 REGULATION BILLIARD BALLS (DYNAMIC CANVAS PBR TEXTURES)
+    // =========================================================================
+    const BALL_COLORS = {
+      0:  '#f9f5eb',
+      1:  '#eab308',
+      2:  '#1d4ed8',
+      3:  '#dc2626',
+      4:  '#6d28d9',
+      5:  '#ea580c',
+      6:  '#15803d',
+      7:  '#7f1d1d',
+      8:  '#111317',
+      9:  '#eab308',
+      10: '#1d4ed8',
+      11: '#dc2626',
+      12: '#6d28d9',
+      13: '#ea580c',
+      14: '#15803d',
+      15: '#7f1d1d'
+    };
+
+    const balls = [];
+    let cueBall = null;
+
+    function createBallTexture(num) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      const ivory = '#f8f3e6';
+      const mainColor = BALL_COLORS[num] || ivory;
+      const isStripe = num >= 9 && num <= 15;
+
+      if (num === 0) {
+        ctx.fillStyle = ivory;
+        ctx.fillRect(0, 0, 512, 256);
+        ctx.fillStyle = '#c81e1e';
+        [[128, 128], [384, 128], [256, 48], [256, 208]].forEach(([dx, dy]) => {
+          ctx.beginPath();
+          ctx.arc(dx, dy, 10, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      } else {
+        if (isStripe) {
+          ctx.fillStyle = ivory;
+          ctx.fillRect(0, 0, 512, 256);
+          ctx.fillStyle = mainColor;
+          ctx.fillRect(0, 58, 512, 140);
+        } else {
+          ctx.fillStyle = mainColor;
+          ctx.fillRect(0, 0, 512, 256);
+        }
+
+        [128, 384].forEach(cx => {
+          ctx.fillStyle = ivory;
+          ctx.beginPath();
+          ctx.arc(cx, 128, 42, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#0f1115';
+          ctx.font = 'bold 46px "Plus Jakarta Sans", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(num), cx, 130);
+        });
+      }
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.anisotropy = 4;
+      return tex;
+    }
+
+    function createAllBalls() {
+      const sphereGeo = new THREE.SphereGeometry(BALL_R, 48, 48);
+
+      for (let num = 0; num <= 15; num++) {
+        const mat = new THREE.MeshPhysicalMaterial({
+          map: createBallTexture(num),
+          roughness: 0.08,
+          metalness: 0.0,
+          clearcoat: 1.0,
+          clearcoatRoughness: 0.05
+        });
+
+        const mesh = new THREE.Mesh(sphereGeo, mat);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+
+        const b = {
+          number: num,
+          mesh,
+          x: 0,
+          y: BALL_R,
+          z: 0,
+          vx: 0,
+          vy: 0,
+          vz: 0,
+          wx: 0,
+          wy: 0,
+          wz: 0,
+          pocketed: false,
+          dropping: false,
+          dropPhase: 0,
+          dropPocket: null
+        };
+        balls.push(b);
+        if (num === 0) cueBall = b;
+      }
+    }
+
+    // =========================================================================
+    // 7. PARAMETRIC 3D CUE STICK & ALWAYS-VISIBLE 3D AIMING RIBBONS
+    // =========================================================================
+    let cuePivot = null;
+    let cueStickMesh = null;
+    let aimGuideGroup = null;
+    let mainAimRibbon = null;
+    let targetAimRibbon = null;
+    let tangentAimRibbon = null;
+    let ghostBallMesh = null;
+    let contactRingMesh = null;
+    let jumpArcLine = null;
+    let jumpLandingRing = null;
+
+    function buildParametricCueStick() {
+      cuePivot = new THREE.Group();
+      cueStickMesh = new THREE.Group();
+
+      const cueLength = 1.46;
+      const shaftGeo = new THREE.CylinderGeometry(0.0062, 0.0105, cueLength * 0.52, 20);
+      shaftGeo.rotateX(Math.PI / 2);
+      shaftGeo.translate(0, 0, -BALL_R - 0.04 - (cueLength * 0.52) / 2);
+      const shaftMat = new THREE.MeshStandardMaterial({ color: 0xf2dfc4, roughness: 0.32 });
+      cueStickMesh.add(new THREE.Mesh(shaftGeo, shaftMat));
+
+      const buttGeo = new THREE.CylinderGeometry(0.0105, 0.0155, cueLength * 0.48, 20);
+      buttGeo.rotateX(Math.PI / 2);
+      buttGeo.translate(0, 0, -BALL_R - 0.04 - cueLength * 0.52 - (cueLength * 0.48) / 2);
+      const buttMat = new THREE.MeshStandardMaterial({ color: 0x26120b, roughness: 0.25 });
+      cueStickMesh.add(new THREE.Mesh(buttGeo, buttMat));
+
+      const collarGeo = new THREE.CylinderGeometry(0.0106, 0.0106, 0.022, 20);
+      collarGeo.rotateX(Math.PI / 2);
+      collarGeo.translate(0, 0, -BALL_R - 0.04 - cueLength * 0.52);
+      const collarMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.2 });
+      cueStickMesh.add(new THREE.Mesh(collarGeo, collarMat));
+
+      const ferruleGeo = new THREE.CylinderGeometry(0.006, 0.0062, 0.014, 16);
+      ferruleGeo.rotateX(Math.PI / 2);
+      ferruleGeo.translate(0, 0, -BALL_R - 0.033);
+      cueStickMesh.add(new THREE.Mesh(ferruleGeo, new THREE.MeshStandardMaterial({ color: 0xffffff })));
+
+      const tipGeo = new THREE.CylinderGeometry(0.0058, 0.006, 0.007, 16);
+      tipGeo.rotateX(Math.PI / 2);
+      tipGeo.translate(0, 0, -BALL_R - 0.023);
+      cueStickMesh.add(new THREE.Mesh(tipGeo, new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.7 })));
+
+      cuePivot.add(cueStickMesh);
+      scene.add(cuePivot);
+    }
+
+    function createRibbonMesh(colorHex, width = 0.0065, opacity = 0.85) {
+      const geo = new THREE.PlaneGeometry(width, 1);
+      geo.rotateX(-Math.PI / 2);
+      geo.translate(0, 0, 0.5);
+      const mat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 5;
+      return mesh;
+    }
+
+    function setRibbonSegment(ribbon, x1, z1, x2, z2) {
+      const dx = x2 - x1;
+      const dz = z2 - z1;
+      const len = Math.hypot(dx, dz);
+      if (len < 0.002) {
+        ribbon.visible = false;
+        return;
+      }
+      ribbon.visible = true;
+      ribbon.position.set(x1, BALL_R + 0.002, z1);
+      ribbon.rotation.y = Math.atan2(dx, dz);
+      ribbon.scale.set(1, 1, len);
+    }
+
+    function buildAimingGuides() {
+      aimGuideGroup = new THREE.Group();
+
+      mainAimRibbon = createRibbonMesh(0xfdf8ee, 0.0065, 0.85);
+      targetAimRibbon = createRibbonMesh(0xd4af37, 0.0065, 0.88);
+      tangentAimRibbon = createRibbonMesh(0x94a3b8, 0.0048, 0.65);
+
+      aimGuideGroup.add(mainAimRibbon, targetAimRibbon, tangentAimRibbon);
+
+      ghostBallMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(BALL_R, 28, 28),
+        new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.32,
+          depthWrite: false
+        })
+      );
+      ghostBallMesh.frustumCulled = false;
+      aimGuideGroup.add(ghostBallMesh);
+
+      const ringGeo = new THREE.RingGeometry(BALL_R * 0.78, BALL_R * 1.05, 32);
+      ringGeo.rotateX(-Math.PI / 2);
+      contactRingMesh = new THREE.Mesh(
+        ringGeo,
+        new THREE.MeshBasicMaterial({ color: 0xe5c384, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })
+      );
+      contactRingMesh.frustumCulled = false;
+      aimGuideGroup.add(contactRingMesh);
+
+      // 3D Parabolic Jump Arc Line
+      const arcPositions = new Float32Array(36 * 3);
+      const arcGeo = new THREE.BufferGeometry();
+      arcGeo.setAttribute('position', new THREE.BufferAttribute(arcPositions, 3));
+      jumpArcLine = new THREE.Line(
+        arcGeo,
+        new THREE.LineBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.9 })
+      );
+      jumpArcLine.frustumCulled = false;
+      jumpArcLine.visible = false;
+      aimGuideGroup.add(jumpArcLine);
+
+      const landGeo = new THREE.RingGeometry(BALL_R * 0.65, BALL_R * 1.15, 28);
+      landGeo.rotateX(-Math.PI / 2);
+      jumpLandingRing = new THREE.Mesh(
+        landGeo,
+        new THREE.MeshBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })
+      );
+      jumpLandingRing.visible = false;
+      aimGuideGroup.add(jumpLandingRing);
+
+      scene.add(aimGuideGroup);
+    }
+
+    function updateCueAndAimGuides() {
+      const showCue = (gameState === 'AIMING' || gameState === 'STRIKING' || gameState === 'AI_THINKING') && !cueBall.pocketed;
+      cuePivot.visible = showCue;
+      aimGuideGroup.visible = (gameState === 'AIMING' && !cueBall.pocketed && userSettings.guideStyle !== 'NONE');
+
+      if (!showCue) return;
+
+      cuePivot.position.set(cueBall.x, cueBall.y, cueBall.z);
+      cuePivot.rotation.set(0, aimAngle, 0);
+
+      const elevRad = THREE.MathUtils.degToRad(Math.abs(cueElevationDeg));
+      const pullBack = gameState === 'STRIKING' ? strokeAnimPhase : shotPower * 0.26;
+      cueStickMesh.position.set(
+        cueSpinX * BALL_R * 0.65,
+        cueSpinY * BALL_R * 0.65,
+        -pullBack
+      );
+      cueStickMesh.rotation.x = -Math.max(0.05, elevRad);
+
+      if (!aimGuideGroup.visible) return;
+
+      const dirX = Math.sin(aimAngle);
+      const dirZ = Math.cos(aimAngle);
+      const maxLen = 2.8 * userSettings.guideLength;
+
+      let bestDist = maxLen;
+      let hitBall = null;
+
+      for (const b of balls) {
+        if (b.number === 0 || b.pocketed || b.dropping) continue;
+        const toBx = b.x - cueBall.x;
+        const toBz = b.z - cueBall.z;
+        const proj = toBx * dirX + toBz * dirZ;
+        if (proj <= 0) continue;
+        const perpSq = (toBx * toBx + toBz * toBz) - proj * proj;
+        const minDistSq = BALL_D * BALL_D;
+        if (perpSq < minDistSq) {
+          const offset = Math.sqrt(minDistSq - perpSq);
+          const impactDist = proj - offset;
+          if (impactDist > 0 && impactDist < bestDist) {
+            bestDist = impactDist;
+            hitBall = b;
+          }
+        }
+      }
+
+      if (!hitBall) {
+        const boundX = PLAY_W / 2 - BALL_R;
+        const boundZ = PLAY_L / 2 - BALL_R;
+        if (Math.abs(dirX) > 1e-5) {
+          const tx = ((dirX > 0 ? boundX : -boundX) - cueBall.x) / dirX;
+          if (tx > 0 && tx < bestDist) bestDist = tx;
+        }
+        if (Math.abs(dirZ) > 1e-5) {
+          const tz = ((dirZ > 0 ? boundZ : -boundZ) - cueBall.z) / dirZ;
+          if (tz > 0 && tz < bestDist) bestDist = tz;
+        }
+      }
+
+      const gx = cueBall.x + dirX * bestDist;
+      const gz = cueBall.z + dirZ * bestDist;
+
+      setRibbonSegment(mainAimRibbon, cueBall.x, cueBall.z, gx, gz);
+
+      const showFull = userSettings.guideStyle === 'FULL';
+      ghostBallMesh.visible = showFull;
+      contactRingMesh.visible = showFull;
+
+      if (showFull) {
+        ghostBallMesh.position.set(gx, BALL_R, gz);
+        contactRingMesh.position.set(gx, 0.002, gz);
+      }
+
+      if (hitBall && showFull) {
+        const isLegal = isTargetBallLegalForPlayer(currentPlayer, hitBall.number, false);
+        ghostBallMesh.material.color.setHex(isLegal ? 0xffffff : 0xe05a47);
+        contactRingMesh.material.color.setHex(isLegal ? 0xe5c384 : 0xe05a47);
+
+        const nx = (hitBall.x - gx) / BALL_D;
+        const nz = (hitBall.z - gz) / BALL_D;
+        const objLen = 0.65 * userSettings.guideLength;
+        setRibbonSegment(targetAimRibbon, hitBall.x, hitBall.z, hitBall.x + nx * objLen, hitBall.z + nz * objLen);
+
+        const dot = dirX * nx + dirZ * nz;
+        let tx = dirX - dot * nx;
+        let tz = dirZ - dot * nz;
+        const tMag = Math.hypot(tx, tz);
+        if (tMag > 0.05) {
+          tx /= tMag;
+          tz /= tMag;
+          const defLen = 0.36 * userSettings.guideLength * Math.sqrt(Math.max(0, 1 - dot * dot));
+          setRibbonSegment(tangentAimRibbon, gx, gz, gx + tx * defLen, gz + tz * defLen);
+        } else {
+          tangentAimRibbon.visible = false;
+        }
+      } else {
+        targetAimRibbon.visible = false;
+        tangentAimRibbon.visible = false;
+      }
+
+      // 3D Parabolic Jump Arc Preview when Butt Elevation < -3°
+      if (cueElevationDeg < -3) {
+        const previewPower = Math.max(0.48, shotPower);
+        const speed = 0.25 + Math.pow(previewPower, 1.15) * MAX_SHOT_SPEED;
+        const jumpRad = THREE.MathUtils.degToRad(Math.abs(cueElevationDeg));
+        const vy0 = speed * Math.sin(jumpRad) * 0.58;
+        const vHoriz = speed * Math.cos(jumpRad * 0.75);
+        const flightTime = (2 * vy0) / GRAVITY;
+
+        const posArr = jumpArcLine.geometry.attributes.position.array;
+        for (let i = 0; i < 36; i++) {
+          const t = (i / 35) * flightTime;
+          posArr[i * 3]     = cueBall.x + dirX * vHoriz * t;
+          posArr[i * 3 + 1] = BALL_R + Math.max(0, vy0 * t - 0.5 * GRAVITY * t * t);
+          posArr[i * 3 + 2] = cueBall.z + dirZ * vHoriz * t;
+        }
+        jumpArcLine.geometry.attributes.position.needsUpdate = true;
+        jumpArcLine.visible = true;
+
+        jumpLandingRing.position.set(
+          cueBall.x + dirX * vHoriz * flightTime,
+          0.003,
+          cueBall.z + dirZ * vHoriz * flightTime
+        );
+        jumpLandingRing.visible = true;
+      } else {
+        jumpArcLine.visible = false;
+        jumpLandingRing.visible = false;
+      }
+    }
+
+    // =========================================================================
+    // 8. 10-SUBSTEP 3D BILLIARD PHYSICS & SPIN SOLVER
+    // =========================================================================
+    function rackRegulation8Ball() {
+      isOpeningBreak = true;
+      tableGroupState = 'OPEN';
+      playerGroups = [null, null];
+      matchStats.innings = 1;
+      matchStats.totalPotted = 0;
+      matchStats.totalFouls = 0;
+
+      balls.forEach(b => {
+        b.vx = b.vy = b.vz = 0;
+        b.wx = b.wy = b.wz = 0;
+        b.y = BALL_R;
+        b.pocketed = false;
+        b.dropping = false;
+        b.dropPhase = 0;
+        b.dropPocket = null;
+        b.mesh.visible = true;
+        b.mesh.scale.set(1, 1, 1);
+      });
+
+      cueBall.x = -PLAY_W * 0.25;
+      cueBall.z = 0;
+      aimAngle = Math.PI / 2;
+
+      const apexX = PLAY_W * 0.25;
+      const rowDx = BALL_D * Math.cos(Math.PI / 6) + 0.0008;
+      const colDz = BALL_R + 0.0005;
+
+      const order = [1, 9, 2, 10, 8, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15];
+      let idx = 0;
+      for (let row = 0; row < 5; row++) {
+        for (let col = 0; col <= row; col++) {
+          const num = order[idx++];
+          const b = balls[num];
+          b.x = apexX + row * rowDx;
+          b.z = (col - row / 2) * (colDz * 2);
+          b.y = BALL_R;
+          b.mesh.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+        }
+      }
+
+      syncBallMeshes();
+      updateScoreboardHUD();
+    }
+
+    function syncBallMeshes() {
+      for (const b of balls) {
+        b.mesh.position.set(b.x, b.y, b.z);
+      }
+    }
+
+    function executeCueStrike(powerNorm) {
+      shotTurnLog.firstHitBall = null;
+      shotTurnLog.pocketedBalls = [];
+      shotTurnLog.cueScratch = false;
+      shotTurnLog.railContacts = 0;
+
+      const speed = 0.25 + Math.pow(powerNorm, 1.15) * MAX_SHOT_SPEED;
+      const dirX = Math.sin(aimAngle);
+      const dirZ = Math.cos(aimAngle);
+      const elevRad = THREE.MathUtils.degToRad(cueElevationDeg);
+
+      let forwardFactor = Math.cos(Math.abs(elevRad));
+      let launchVy = 0;
+
+      if (cueElevationDeg < -3) {
+        const jumpAngle = THREE.MathUtils.degToRad(Math.abs(cueElevationDeg));
+        launchVy = speed * Math.sin(jumpAngle) * 0.58;
+        forwardFactor = Math.cos(jumpAngle * 0.75);
+      }
+
+      cueBall.vx = dirX * speed * forwardFactor;
+      cueBall.vz = dirZ * speed * forwardFactor;
+      cueBall.vy = launchVy;
+
+      const rightX = dirZ;
+      const rightZ = -dirX;
+      const topSpin = (cueSpinY * speed * 2.4) / BALL_R;
+      cueBall.wx = rightX * topSpin;
+      cueBall.wz = rightZ * topSpin;
+      cueBall.wy = (-cueSpinX * speed * 2.1) / BALL_R;
+
+      audio.playCueStrike(powerNorm);
+      isOpeningBreak = false;
+      gameState = 'SIMULATING';
+    }
+
+    function stepBilliardPhysics(dt) {
+      const clampedDt = Math.min(dt, 0.033);
+      const subDt = clampedDt / SUBSTEPS;
+      const rollDecelRate = CLOTH_DECEL_RATES[userSettings.clothSpeed] || 0.145;
+
+      for (let s = 0; s < SUBSTEPS; s++) {
+        for (const b of balls) {
+          if (b.pocketed) continue;
+
+          if (b.dropping) {
+            b.dropPhase += subDt * 2.8;
+            const p = b.dropPocket;
+            if (b.dropPhase < 1.0) {
+              const angle = b.dropPhase * Math.PI * 3;
+              const spiralR = (1 - b.dropPhase) * (p.r * 0.55);
+              b.x = p.x + Math.cos(angle) * spiralR;
+              b.z = p.z + Math.sin(angle) * spiralR;
+              b.y = BALL_R - b.dropPhase * 0.19;
+            } else {
+              b.dropping = false;
+              b.pocketed = true;
+              b.vx = b.vy = b.vz = 0;
+              b.mesh.visible = false;
+            }
+            continue;
+          }
+
+          b.x += b.vx * subDt;
+          b.z += b.vz * subDt;
+
+          if (b.y > BALL_R || b.vy !== 0) {
+            b.vy -= GRAVITY * subDt;
+            b.y += b.vy * subDt;
+            if (b.y <= BALL_R) {
+              b.y = BALL_R;
+              if (b.vy < -0.22) {
+                b.vy = -b.vy * 0.52;
+                audio.playRailThud(Math.abs(b.vy));
+              } else {
+                b.vy = 0;
+              }
+            }
+          }
+
+          if (b.y <= BALL_R + 0.002) {
+            const vSurfX = b.vx - b.wz * BALL_R;
+            const vSurfZ = b.vz + b.wx * BALL_R;
+            const slipSpeed = Math.hypot(vSurfX, vSurfZ);
+
+            if (slipSpeed > 0.02) {
+              const muSlide = 0.21;
+              const dv = muSlide * GRAVITY * subDt;
+              const ux = vSurfX / slipSpeed;
+              const uz = vSurfZ / slipSpeed;
+              b.vx -= ux * Math.min(dv, slipSpeed * 0.45);
+              b.vz -= uz * Math.min(dv, slipSpeed * 0.45);
+
+              const dw = (2.5 * dv) / BALL_R;
+              b.wz += ux * dw * 0.45;
+              b.wx -= uz * dw * 0.45;
+            } else {
+              b.wz = b.vx / BALL_R;
+              b.wx = -b.vz / BALL_R;
+            }
+
+            const speed = Math.hypot(b.vx, b.vz);
+            if (speed > 0) {
+              const rollDecel = rollDecelRate * subDt;
+              const nextSpeed = Math.max(0, speed - rollDecel);
+              const ratio = nextSpeed / speed;
+              b.vx *= ratio;
+              b.vz *= ratio;
+              if (nextSpeed < 0.006) {
+                b.vx = 0;
+                b.vz = 0;
+              }
+            }
+
+            b.wy *= Math.pow(0.45, subDt);
+          }
+
+          for (const p of POCKETS) {
+            const dx = p.x - b.x;
+            const dz = p.z - b.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist < p.r * 0.84 && b.y <= BALL_R + 0.02) {
+              b.dropping = true;
+              b.dropPhase = 0;
+              b.dropPocket = p;
+              b.vx = b.vz = 0;
+              audio.playPocketDrop();
+              if (b.number === 0) {
+                shotTurnLog.cueScratch = true;
+              } else if (!shotTurnLog.pocketedBalls.includes(b.number)) {
+                shotTurnLog.pocketedBalls.push(b.number);
+                matchStats.totalPotted++;
+              }
+              break;
+            } else if (dist < p.r * 1.15 && b.y <= BALL_R + 0.005) {
+              const pull = 1.9 * subDt;
+              b.vx += (dx / dist) * pull;
+              b.vz += (dz / dist) * pull;
+            }
+          }
+        }
+
+        // True 3D Ball-to-Ball Collisions
+        for (let i = 0; i < balls.length; i++) {
+          const b1 = balls[i];
+          if (b1.pocketed || b1.dropping) continue;
+          for (let j = i + 1; j < balls.length; j++) {
+            const b2 = balls[j];
+            if (b2.pocketed || b2.dropping) continue;
+
+            const dx = b2.x - b1.x;
+            const dy = b2.y - b1.y;
+            const dz = b2.z - b1.z;
+            const distSq = dx * dx + dy * dy + dz * dz;
+
+            if (distSq < BALL_D * BALL_D && distSq > 1e-9) {
+              const dist = Math.sqrt(distSq);
+              const nx = dx / dist;
+              const ny = dy / dist;
+              const nz = dz / dist;
+
+              const overlap = (BALL_D - dist) * 0.5;
+              b1.x -= nx * overlap;
+              b1.y = Math.max(BALL_R, b1.y - ny * overlap);
+              b1.z -= nz * overlap;
+              b2.x += nx * overlap;
+              b2.y = Math.max(BALL_R, b2.y + ny * overlap);
+              b2.z += nz * overlap;
+
+              const rvx = b1.vx - b2.vx;
+              const rvy = b1.vy - b2.vy;
+              const rvz = b1.vz - b2.vz;
+              const velAlongNormal = rvx * nx + rvy * ny + rvz * nz;
+
+              if (velAlongNormal > 0) {
+                if (b1.number === 0 && shotTurnLog.firstHitBall === null) {
+                  shotTurnLog.firstHitBall = b2.number;
+                } else if (b2.number === 0 && shotTurnLog.firstHitBall === null) {
+                  shotTurnLog.firstHitBall = b1.number;
+                }
+
+                const restitution = 0.94;
+                const impulse = ((1 + restitution) * velAlongNormal) * 0.5;
+                b1.vx -= impulse * nx;
+                b1.vy -= impulse * ny;
+                b1.vz -= impulse * nz;
+                b2.vx += impulse * nx;
+                b2.vy += impulse * ny;
+                b2.vz += impulse * nz;
+
+                if (s === 0 || velAlongNormal > 0.25) {
+                  audio.playBallHit(velAlongNormal);
+                }
+              }
+            }
+          }
+        }
+
+        // Cushion Segment & Jaw Vertex Collisions
+        for (const b of balls) {
+          if (b.pocketed || b.dropping) continue;
+
+          for (const seg of cushionSegments) {
+            if (Math.abs(seg.nz) > 0) {
+              if (b.x >= seg.x1 && b.x <= seg.x2) {
+                const signedDist = (b.z - seg.z1) * seg.nz;
+                if (signedDist < BALL_R && signedDist > -0.04) {
+                  b.z = seg.z1 + seg.nz * BALL_R;
+                  if (b.vz * seg.nz < 0) {
+                    const hitSpeed = Math.abs(b.vz);
+                    b.vz = -b.vz * 0.78;
+                    b.vx += b.wy * BALL_R * 0.16 * seg.nz;
+                    shotTurnLog.railContacts++;
+                    if (hitSpeed > 0.08) audio.playRailThud(hitSpeed);
+                  }
+                }
+              }
+            } else {
+              if (b.z >= seg.z1 && b.z <= seg.z2) {
+                const signedDist = (b.x - seg.x1) * seg.nx;
+                if (signedDist < BALL_R && signedDist > -0.04) {
+                  b.x = seg.x1 + seg.nx * BALL_R;
+                  if (b.vx * seg.nx < 0) {
+                    const hitSpeed = Math.abs(b.vx);
+                    b.vx = -b.vx * 0.78;
+                    b.vz -= b.wy * BALL_R * 0.16 * seg.nx;
+                    shotTurnLog.railContacts++;
+                    if (hitSpeed > 0.08) audio.playRailThud(hitSpeed);
+                  }
+                }
+              }
+            }
+          }
+
+          for (const jaw of jawCorners) {
+            const dx = b.x - jaw.x;
+            const dz = b.z - jaw.z;
+            const dSq = dx * dx + dz * dz;
+            if (dSq < BALL_R * BALL_R && dSq > 1e-8) {
+              const d = Math.sqrt(dSq);
+              const nx = dx / d;
+              const nz = dz / d;
+              b.x = jaw.x + nx * BALL_R;
+              b.z = jaw.z + nz * BALL_R;
+              const vn = b.vx * nx + b.vz * nz;
+              if (vn < 0) {
+                b.vx -= 1.75 * vn * nx;
+                b.vz -= 1.75 * vn * nz;
+                audio.playRailThud(Math.abs(vn));
+              }
+            }
+          }
+        }
+      }
+
+      const qStep = new THREE.Quaternion();
+      const rotAxis = new THREE.Vector3();
+      for (const b of balls) {
+        b.mesh.position.set(b.x, b.y, b.z);
+        if (b.pocketed) continue;
+        const speed = Math.hypot(b.vx, b.vz);
+        if (speed > 0.001 || Math.abs(b.wy) > 0.05) {
+          rotAxis.set(b.vz, b.wy * BALL_R * 0.3, -b.vx).normalize();
+          const angle = (speed / BALL_R) * clampedDt;
+          qStep.setFromAxisAngle(rotAxis, angle);
+          b.mesh.quaternion.premultiply(qStep);
+        }
+      }
+    }
+
+    function areAllBallsSettled() {
+      for (const b of balls) {
+        if (b.dropping) return false;
+        if (b.pocketed) continue;
+        if (Math.hypot(b.vx, b.vz) > 0.006 || Math.abs(b.vy) > 0.02 || b.y > BALL_R + 0.002) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // =========================================================================
+    // 9. COMPLETE 8-BALL RULES ENGINE & FIXED FINAL-BALL TURN CHECK
+    // =========================================================================
+    function getBallGroup(num) {
+      if (num >= 1 && num <= 7) return 'SOLIDS';
+      if (num >= 9 && num <= 15) return 'STRIPES';
+      return null;
+    }
+
+    function getRemainingGroupBalls(group, includePocketedThisTurn = false) {
+      if (!group) return 7;
+      let count = 0;
+      for (const b of balls) {
+        if (b.pocketed && !(includePocketedThisTurn && shotTurnLog.pocketedBalls.includes(b.number))) continue;
+        if (group === 'SOLIDS' && b.number >= 1 && b.number <= 7) count++;
+        if (group === 'STRIPES' && b.number >= 9 && b.number <= 15) count++;
+      }
+      return count;
+    }
+
+    function isTargetBallLegalForPlayer(playerIdx, ballNumber, includePocketedThisTurn = false) {
+      if (ballNumber === 0) return false;
+      if (userSettings.gameMode === 'PRACTICE') return true;
+      if (tableGroupState === 'OPEN') return ballNumber !== 8;
+      const grp = playerGroups[playerIdx];
+      const rem = getRemainingGroupBalls(grp, includePocketedThisTurn);
+      if (rem === 0) return ballNumber === 8;
+      if (grp === 'SOLIDS') return ballNumber >= 1 && ballNumber <= 7;
+      if (grp === 'STRIPES') return ballNumber >= 9 && ballNumber <= 15;
+      return false;
+    }
+
+    function evaluateCompletedTurn() {
+      const pIdx = currentPlayer;
+      const oppIdx = 1 - pIdx;
+      const pName = getPlayerDisplayName(pIdx);
+      const oppName = getPlayerDisplayName(oppIdx);
+
+      // Solo Practice Mode: Respawn cue ball if scratched, or end frame when all 15 balls are cleared
+      if (userSettings.gameMode === 'PRACTICE') {
+        if (shotTurnLog.cueScratch) {
+          cueBall.pocketed = false;
+          cueBall.dropping = false;
+          cueBall.mesh.visible = true;
+          placeCueBallWithoutOverlap(-PLAY_W * 0.25, 0);
+          matchStats.totalFouls++;
+        }
+        const remainingObj = balls.filter(b => b.number !== 0 && !b.pocketed).length;
+        if (remainingObj === 0) {
+          endMatch(0, 'Cleared the entire table in Solo Practice!');
+          return;
+        }
+        matchStats.innings++;
+        beginPlayerTurn(shotTurnLog.cueScratch, shotTurnLog.cueScratch ? 'Cue Ball Scratch • Ball-in-Hand' : 'Solo Practice • Continue Shooting');
+        return;
+      }
+
+      const pocketed8 = shotTurnLog.pocketedBalls.includes(8);
+      let foulReason = null;
+
+      if (shotTurnLog.cueScratch) {
+        foulReason = 'Cue Ball Scratch';
+      } else if (shotTurnLog.firstHitBall === null) {
+        foulReason = 'No Ball Contacted';
+      } else if (!isTargetBallLegalForPlayer(pIdx, shotTurnLog.firstHitBall, true)) {
+        foulReason = `Wrong Ball First (Hit #${shotTurnLog.firstHitBall})`;
+      }
+
+      if (foulReason) {
+        matchStats.totalFouls++;
+      }
+
+      if (pocketed8) {
+        const hadClearedGroup = tableGroupState === 'ASSIGNED' && getRemainingGroupBalls(playerGroups[pIdx], true) === 0;
+        if (hadClearedGroup && !foulReason) {
+          endMatch(pIdx, `${pName} legally pocketed the 8-Ball!`);
+        } else {
+          const why = foulReason
+            ? `${pName} committed a foul (${foulReason}) while pocketing the 8-Ball.`
+            : `${pName} pocketed the 8-Ball early!`;
+          endMatch(oppIdx, why);
+        }
+        return;
+      }
+
+      let legallyPocketedOwn = false;
+      if (!foulReason && shotTurnLog.pocketedBalls.length > 0) {
+        if (tableGroupState === 'OPEN') {
+          const firstColored = shotTurnLog.pocketedBalls.find(n => n !== 8);
+          if (firstColored) {
+            const chosenGroup = getBallGroup(firstColored);
+            playerGroups[pIdx] = chosenGroup;
+            playerGroups[oppIdx] = chosenGroup === 'SOLIDS' ? 'STRIPES' : 'SOLIDS';
+            tableGroupState = 'ASSIGNED';
+            legallyPocketedOwn = true;
+          }
+        } else {
+          const myGroup = playerGroups[pIdx];
+          legallyPocketedOwn = shotTurnLog.pocketedBalls.some(n => getBallGroup(n) === myGroup);
+        }
+      }
+
+      updateScoreboardHUD();
+
+      if (foulReason) {
+        if (shotTurnLog.cueScratch) {
+          cueBall.pocketed = false;
+          cueBall.dropping = false;
+          cueBall.mesh.visible = true;
+          placeCueBallWithoutOverlap(-PLAY_W * 0.25, 0);
+        }
+        currentPlayer = oppIdx;
+        matchStats.innings++;
+        beginPlayerTurn(true, `Foul: ${foulReason} • ${oppName} has Ball-in-Hand`);
+      } else if (legallyPocketedOwn) {
+        beginPlayerTurn(false, `${pName} continues their run!`);
+      } else {
+        currentPlayer = oppIdx;
+        matchStats.innings++;
+        beginPlayerTurn(false, `${oppName}'s Turn at the Table`);
+      }
+    }
+
+    function placeCueBallWithoutOverlap(prefX, prefZ) {
+      const boundX = PLAY_W / 2 - BALL_R - 0.01;
+      const boundZ = PLAY_L / 2 - BALL_R - 0.01;
+      let tx = THREE.MathUtils.clamp(prefX, -boundX, boundX);
+      let tz = THREE.MathUtils.clamp(prefZ, -boundZ, boundZ);
+
+      for (let attempt = 0; attempt < 40; attempt++) {
+        let valid = true;
+        for (const b of balls) {
+          if (b.number === 0 || b.pocketed) continue;
+          if (Math.hypot(tx - b.x, tz - b.z) < BALL_D + 0.006) {
+            valid = false;
+            break;
+          }
+        }
+        if (valid) break;
+        tx = THREE.MathUtils.clamp(prefX + (Math.random() - 0.5) * 0.35, -boundX, boundX);
+        tz = THREE.MathUtils.clamp(prefZ + (Math.random() - 0.5) * 0.35, -boundZ, boundZ);
+      }
+
+      cueBall.x = tx;
+      cueBall.y = BALL_R;
+      cueBall.z = tz;
+      cueBall.vx = cueBall.vy = cueBall.vz = 0;
+      syncBallMeshes();
+    }
+
+    function beginPlayerTurn(ballInHand = false, statusMessage = '') {
+      updateScoreboardHUD();
+      const isAITurn = userSettings.gameMode === 'AI' && currentPlayer === 1;
+
+      if (isAITurn) {
+        gameState = 'AI_THINKING';
+        setStatusBanner(
+          statusMessage || `${getPlayerDisplayName(1)} is sizing up the table...`,
+          'Analyzing cut angles and pocket clearance'
+        );
+        setTimeout(() => runAIBotTurn(ballInHand), 650);
+      } else {
+        gameState = 'AIMING';
+        const subHint = ballInHand
+          ? 'Ball-in-Hand: Drag the white cue ball anywhere on the cloth, or drag the table to aim'
+          : (userSettings.gameMode === 'LOCAL'
+              ? `Pass Device to ${getPlayerDisplayName(currentPlayer)} • Drag table to aim`
+              : 'Drag on the table to aim • Pull power bar or hold Spacebar to strike');
+        setStatusBanner(statusMessage || `${getPlayerDisplayName(currentPlayer)}'s Turn`, subHint);
+      }
+    }
+
+    function endMatch(winnerIdx, reasonText) {
+      gameState = 'GAME_OVER';
+      document.getElementById('winner-title').textContent = `${getPlayerDisplayName(winnerIdx)} Wins!`;
+      document.getElementById('winner-reason').textContent = reasonText;
+      document.getElementById('stat-innings').textContent = String(matchStats.innings);
+      document.getElementById('stat-potted').textContent = String(matchStats.totalPotted);
+      document.getElementById('stat-fouls').textContent = String(matchStats.totalFouls);
+      document.getElementById('gameover-modal').classList.remove('hidden');
+    }
+
+    // =========================================================================
+    // 10. GEOMETRIC AI BOT (ROOKIE, CLUB HUSTLER, PRO SHARK)
+    // =========================================================================
+    function isCorridorClear(x1, z1, x2, z2, ignoreNum1, ignoreNum2) {
+      const dx = x2 - x1;
+      const dz = z2 - z1;
+      const len = Math.hypot(dx, dz);
+      if (len < 1e-4) return true;
+      const ux = dx / len;
+      const uz = dz / len;
+
+      for (const b of balls) {
+        if (b.pocketed || b.dropping || b.number === ignoreNum1 || b.number === ignoreNum2) continue;
+        const proj = (b.x - x1) * ux + (b.z - z1) * uz;
+        if (proj <= 0 || proj >= len) continue;
+        const perp = Math.abs((b.x - x1) * uz - (b.z - z1) * ux);
+        if (perp < BALL_D * 1.04) return false;
+      }
+      return true;
+    }
+
+    function runAIBotTurn(hasBallInHand) {
+      if (gameState !== 'AI_THINKING') return;
+
+      if (hasBallInHand) {
+        placeCueBallWithoutOverlap(-PLAY_W * 0.18, (Math.random() - 0.5) * 0.35);
+      }
+
+      const legalTargets = balls.filter(
+        b => !b.pocketed && b.number !== 0 && isTargetBallLegalForPlayer(1, b.number, false)
+      );
+
+      let bestCandidate = null;
+      let bestScore = -Infinity;
+
+      for (const target of legalTargets) {
+        for (const pocket of POCKETS) {
+          const toPx = pocket.x - target.x;
+          const toPz = pocket.z - target.z;
+          const distToPocket = Math.hypot(toPx, toPz);
+          const pDirX = toPx / distToPocket;
+          const pDirZ = toPz / distToPocket;
+
+          const gx = target.x - pDirX * BALL_D;
+          const gz = target.z - pDirZ * BALL_D;
+
+          const toGx = gx - cueBall.x;
+          const toGz = gz - cueBall.z;
+          const distCueToGhost = Math.hypot(toGx, toGz);
+          if (distCueToGhost < BALL_D) continue;
+
+          const cDirX = toGx / distCueToGhost;
+          const cDirZ = toGz / distCueToGhost;
+
+          const cutCos = cDirX * pDirX + cDirZ * pDirZ;
+          if (cutCos < 0.18) continue;
+
+          const cueClear = isCorridorClear(cueBall.x, cueBall.z, gx, gz, 0, target.number);
+          const potClear = isCorridorClear(target.x, target.z, pocket.x, pocket.z, target.number, 0);
+
+          if (cueClear && potClear) {
+            const score = cutCos * 120 - distCueToGhost * 22 - distToPocket * 28;
+            if (score > bestScore) {
+              bestScore = score;
+              bestCandidate = {
+                angle: Math.atan2(toGx, toGz),
+                power: THREE.MathUtils.clamp(0.32 + (distCueToGhost + distToPocket) * 0.18 / Math.max(0.35, cutCos), 0.28, 0.85)
+              };
+            }
+          }
+        }
+      }
+
+      if (!bestCandidate && legalTargets.length > 0) {
+        const t = legalTargets[0];
+        bestCandidate = {
+          angle: Math.atan2(t.x - cueBall.x, t.z - cueBall.z),
+          power: 0.45
+        };
+      } else if (!bestCandidate) {
+        bestCandidate = { angle: Math.PI / 2, power: 0.5 };
+      }
+
+      const noiseDeg = userSettings.aiDifficulty === 'ROOKIE'
+        ? 3.2
+        : (userSettings.aiDifficulty === 'HUSTLER' ? 1.05 : 0.12);
+      const angleError = THREE.MathUtils.degToRad((Math.random() - 0.5) * 2 * noiseDeg);
+
+      aimAngle = bestCandidate.angle + angleError;
+      cueElevationDeg = 0;
+      cueSpinX = 0;
+      cueSpinY = userSettings.aiDifficulty === 'SHARK' ? -0.25 : 0;
+      updateSpinHUD();
+
+      pendingStrikePower = bestCandidate.power;
+      strokeAnimPhase = pendingStrikePower * 0.26;
+      gameState = 'STRIKING';
+    }
+
+    // =========================================================================
+    // 11. CAMERA RIG UPDATE & TOP-VIEW LAMP AUTO-HIDE
+    // =========================================================================
+    function setCameraViewMode(mode) {
+      cameraMode = mode;
+      document.getElementById('cam-aim-btn').classList.toggle('active', mode === 'aim');
+      document.getElementById('cam-orbit-btn').classList.toggle('active', mode === 'orbit');
+      document.getElementById('cam-top-btn').classList.toggle('active', mode === 'top');
+
+      orbitControls.enabled = (mode === 'orbit');
+      if (mode === 'orbit') {
+        camera.up.set(0, 1, 0);
+        orbitControls.target.set(cueBall.x * 0.5, 0, cueBall.z * 0.5);
+      }
+    }
+
+    function updateCameraRig(dt) {
+      if (overheadLampGroup) {
+        overheadLampGroup.visible = (cameraMode !== 'top' && camera.position.y < 1.55);
+      }
+
+      if (cameraMode === 'top') {
+        camera.up.set(0, 0, -1);
+        camRig.targetPos.set(0, 2.38, 0.001);
+        camRig.targetLook.set(0, 0, 0);
+      } else {
+        camera.up.set(0, 1, 0);
+        if (cameraMode === 'orbit') {
+          orbitControls.update();
+          return;
+        }
+        const dirX = Math.sin(aimAngle);
+        const dirZ = Math.cos(aimAngle);
+        if (gameState === 'SIMULATING') {
+          camRig.targetPos.set(cueBall.x - dirX * 1.15, 0.78, cueBall.z - dirZ * 1.15);
+          camRig.targetLook.set(0, 0, 0);
+        } else {
+          camRig.targetPos.set(cueBall.x - dirX * 0.78, 0.34, cueBall.z - dirZ * 0.78);
+          camRig.targetLook.set(cueBall.x + dirX * 0.55, BALL_R, cueBall.z + dirZ * 0.55);
+        }
+      }
+
+      const alpha = 1 - Math.exp(-8.5 * Math.min(dt, 0.05));
+      camRig.currentPos.lerp(camRig.targetPos, alpha);
+      camRig.currentLook.lerp(camRig.targetLook, alpha);
+      camera.position.copy(camRig.currentPos);
+      camera.lookAt(camRig.currentLook);
+    }
+
+    // =========================================================================
+    // 12. HUD SCOREBOARD, MOVABLE PANELS & INTERACTION LISTENERS
+    // =========================================================================
+    function getPlayerDisplayName(idx) {
+      if (idx === 0) return userSettings.p1CustomName || 'Player 1';
+      if (userSettings.gameMode === 'LOCAL') return userSettings.p2CustomName || 'Player 2';
+      if (userSettings.gameMode === 'PRACTICE') return 'Solo Table';
+      const names = { ROOKIE: 'Rookie Bot', HUSTLER: 'Club Hustler AI', SHARK: 'Pro Shark AI' };
+      return names[userSettings.aiDifficulty] || 'AI Bot';
+    }
+
+    function setStatusBanner(mainText, subText) {
+      document.getElementById('status-main').textContent = mainText;
+      document.getElementById('status-sub').textContent = subText;
+    }
+
+    function updateScoreboardHUD() {
+      document.getElementById('p1-name').textContent = getPlayerDisplayName(0);
+      document.getElementById('p2-name').textContent = getPlayerDisplayName(1);
+
+      const modeLabels = {
+        AI: 'Match Status • vs. AI',
+        LOCAL: 'Match Status • 2P Pass & Play',
+        PRACTICE: 'Solo Practice Mode'
+      };
+      document.getElementById('mode-header-label').textContent = modeLabels[userSettings.gameMode] || 'Match Status';
+
+      document.getElementById('p1-panel').classList.toggle('player-card-active', currentPlayer === 0);
+      document.getElementById('p2-panel').classList.toggle('player-card-active', currentPlayer === 1 && userSettings.gameMode !== 'PRACTICE');
+
+      const remTotal = balls.filter(b => b.number !== 0 && !b.pocketed).length;
+      document.getElementById('tel-inning').textContent = String(matchStats.innings);
+      document.getElementById('tel-balls').textContent = String(remTotal);
+
+      [0, 1].forEach(idx => {
+        const badgeEl = document.getElementById(idx === 0 ? 'p1-group' : 'p2-group');
+        const rackEl = document.getElementById(idx === 0 ? 'p1-rack' : 'p2-rack');
+        rackEl.innerHTML = '';
+
+        if (userSettings.gameMode === 'PRACTICE') {
+          badgeEl.textContent = idx === 0 ? 'FREE PLAY' : 'SOLO';
+          return;
+        }
+
+        const grp = playerGroups[idx];
+        if (tableGroupState === 'OPEN') {
+          badgeEl.textContent = 'OPEN TABLE';
+        } else {
+          const rem = getRemainingGroupBalls(grp, false);
+          badgeEl.textContent = rem === 0 ? 'ON 8-BALL' : grp;
+          const startNum = grp === 'SOLIDS' ? 1 : 9;
+          const endNum = grp === 'SOLIDS' ? 7 : 15;
+          for (let n = startNum; n <= endNum; n++) {
+            const b = balls[n];
+            const dot = document.createElement('div');
+            dot.className = 'mini-ball' + (b.pocketed ? ' pocketed' : '');
+            dot.style.background = BALL_COLORS[n];
+            dot.style.color = '#fff';
+            dot.textContent = n;
+            rackEl.appendChild(dot);
+          }
+        }
+      });
+    }
+
+    function updateSpinHUD() {
+      const dot = document.getElementById('spin-dot');
+      dot.style.left = `${50 + cueSpinX * 38}%`;
+      dot.style.top = `${50 - cueSpinY * 38}%`;
+
+      const elevSlider = document.getElementById('elev-slider');
+      const elevLabel = document.getElementById('elev-label');
+      elevSlider.value = cueElevationDeg;
+      document.getElementById('tel-elev').textContent = `${cueElevationDeg}°`;
+
+      if (cueElevationDeg < -3) {
+        elevLabel.textContent = `${cueElevationDeg}° Jump`;
+        elevLabel.classList.add('jump-active');
+      } else if (cueElevationDeg > 3) {
+        elevLabel.textContent = `+${cueElevationDeg}° Masse`;
+        elevLabel.classList.remove('jump-active');
+      } else {
+        elevLabel.textContent = `${cueElevationDeg}° Level`;
+        elevLabel.classList.remove('jump-active');
+      }
+    }
+
+    function updatePowerHUD() {
+      const pct = Math.round(shotPower * 100);
+      document.getElementById('power-fill').style.height = `${pct}%`;
+      document.getElementById('power-pct').textContent = `${pct}%`;
+    }
+
+    function updateRaycaster(clientX, clientY) {
+      pointerNDC.x = (clientX / window.innerWidth) * 2 - 1;
+      pointerNDC.y = -(clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(pointerNDC, camera);
+    }
+
+    function setupAllEventListeners() {
+      // Top Camera & Action Buttons
+      document.getElementById('cam-aim-btn').addEventListener('click', () => setCameraViewMode('aim'));
+      document.getElementById('cam-orbit-btn').addEventListener('click', () => setCameraViewMode('orbit'));
+      document.getElementById('cam-top-btn').addEventListener('click', () => setCameraViewMode('top'));
+
+      document.getElementById('quick-rerack-btn').addEventListener('click', () => {
+        document.getElementById('main-menu-modal').classList.add('hidden');
+        document.getElementById('gameover-modal').classList.add('hidden');
+        currentPlayer = 0;
+        rackRegulation8Ball();
+        beginPlayerTurn(true, 'Opening Break Shot');
+      });
+
+      const muteBtn = document.getElementById('mute-btn');
+      muteBtn.addEventListener('click', () => {
+        userSettings.muted = !userSettings.muted;
+        muteBtn.textContent = userSettings.muted ? 'Sound: Off' : 'Sound: On';
+        muteBtn.classList.toggle('active', userSettings.muted);
+      });
+
+      const uiPopover = document.getElementById('ui-popover');
+      document.getElementById('ui-popover-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        uiPopover.classList.toggle('open');
+      });
+
+      document.getElementById('open-menu-btn').addEventListener('click', () => {
+        document.getElementById('main-menu-modal').classList.remove('hidden');
+      });
+
+      document.getElementById('close-menu-x').addEventListener('click', () => {
+        document.getElementById('main-menu-modal').classList.add('hidden');
+      });
+
+      // Modal Navigation Tabs
+      document.querySelectorAll('.menu-tab-btn').forEach(tabBtn => {
+        tabBtn.addEventListener('click', () => {
+          document.querySelectorAll('.menu-tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+          tabBtn.classList.add('active');
+          document.getElementById(tabBtn.dataset.tab).classList.add('active');
+        });
+      });
+
+      // UI Visibility Checkboxes
+      const panelMap = {
+        'tog-p1': 'p1-panel',
+        'tog-p2': 'p2-panel',
+        'tog-status': 'status-panel',
+        'tog-spin': 'spin-panel',
+        'tog-power': 'power-panel'
+      };
+      Object.entries(panelMap).forEach(([chkId, panelId]) => {
+        document.getElementById(chkId).addEventListener('change', e => {
+          document.getElementById(panelId).classList.toggle('hidden-panel', !e.target.checked);
+        });
+      });
+
+      document.getElementById('tog-autofade').addEventListener('change', e => {
+        userSettings.autoFadeHud = e.target.checked;
+      });
+
+      document.getElementById('hud-opacity-slider').addEventListener('input', e => {
+        const val = Number(e.target.value);
+        document.getElementById('hud-opacity-label').textContent = `${val}%`;
+        document.documentElement.style.setProperty('--hud-opacity', (val / 100).toFixed(2));
+      });
+
+      // Movable HUD Drag Handles
+      document.querySelectorAll('.movable-panel').forEach(panel => {
+        const header = panel.querySelector('.panel-header');
+        let draggingPanel = false;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        header.addEventListener('pointerdown', e => {
+          e.stopPropagation();
+          draggingPanel = true;
+          const rect = panel.getBoundingClientRect();
+          panel.style.transform = 'none';
+          panel.style.left = `${rect.left}px`;
+          panel.style.top = `${rect.top}px`;
+          panel.style.right = 'auto';
+          panel.style.bottom = 'auto';
+          offsetX = e.clientX - rect.left;
+          offsetY = e.clientY - rect.top;
+          header.setPointerCapture(e.pointerId);
+        });
+
+        header.addEventListener('pointermove', e => {
+          if (!draggingPanel) return;
+          const nx = THREE.MathUtils.clamp(e.clientX - offsetX, 6, window.innerWidth - panel.offsetWidth - 6);
+          const ny = THREE.MathUtils.clamp(e.clientY - offsetY, 6, window.innerHeight - panel.offsetHeight - 6);
+          panel.style.left = `${nx}px`;
+          panel.style.top = `${ny}px`;
+        });
+
+        header.addEventListener('pointerup', () => {
+          draggingPanel = false;
+        });
+      });
+
+      document.getElementById('reset-hud-btn').addEventListener('click', () => {
+        document.querySelectorAll('.movable-panel').forEach(p => {
+          p.style.left = '';
+          p.style.top = '';
+          p.style.right = '';
+          p.style.bottom = '';
+          p.style.transform = '';
+        });
+      });
+
+      // Spin Pad & Butt Elevation Controls
+      const spinPad = document.getElementById('spin-pad');
+      let draggingSpin = false;
+      const updateSpinFromEvent = e => {
+        const rect = spinPad.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const maxR = rect.width * 0.42;
+        let dx = (e.clientX - cx) / maxR;
+        let dy = -(e.clientY - cy) / maxR;
+        const mag = Math.hypot(dx, dy);
+        if (mag > 1) {
+          dx /= mag;
+          dy /= mag;
+        }
+        cueSpinX = dx;
+        cueSpinY = dy;
+        updateSpinHUD();
+      };
+
+      spinPad.addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        draggingSpin = true;
+        spinPad.setPointerCapture(e.pointerId);
+        updateSpinFromEvent(e);
+      });
+      spinPad.addEventListener('pointermove', e => {
+        if (draggingSpin) updateSpinFromEvent(e);
+      });
+      spinPad.addEventListener('pointerup', () => { draggingSpin = false; });
+
+      document.getElementById('elev-slider').addEventListener('input', e => {
+        cueElevationDeg = Number(e.target.value);
+        updateSpinHUD();
+      });
+
+      document.getElementById('reset-spin-btn').addEventListener('click', () => {
+        cueSpinX = 0;
+        cueSpinY = 0;
+        cueElevationDeg = 0;
+        updateSpinHUD();
+      });
+
+      // Power Track Drag-to-Shoot
+      const powerTrack = document.getElementById('power-track');
+      powerTrack.addEventListener('pointerdown', e => {
+        if (gameState !== 'AIMING') return;
+        e.stopPropagation();
+        isChargingPower = true;
+        powerDragStartY = e.clientY;
+        powerTrack.setPointerCapture(e.pointerId);
+      });
+
+      powerTrack.addEventListener('pointermove', e => {
+        if (!isChargingPower) return;
+        const dy = Math.max(0, e.clientY - powerDragStartY);
+        shotPower = THREE.MathUtils.clamp(dy / 145, 0, 1);
+        updatePowerHUD();
+      });
+
+      powerTrack.addEventListener('pointerup', () => {
+        if (!isChargingPower) return;
+        isChargingPower = false;
+        if (shotPower > 0.04 && gameState === 'AIMING') {
+          pendingStrikePower = shotPower;
+          strokeAnimPhase = shotPower * 0.26;
+          gameState = 'STRIKING';
+        }
+        shotPower = 0;
+        updatePowerHUD();
+      });
+
+      // Canvas Table Aiming, Top-View 360° Radial Drag & Ball-in-Hand Placement
+      renderer.domElement.addEventListener('pointerdown', e => {
+        uiPopover.classList.remove('open');
+        if (gameState !== 'AIMING' || cameraMode === 'orbit') return;
+
+        updateRaycaster(e.clientX, e.clientY);
+
+        const cueHits = raycaster.intersectObject(cueBall.mesh);
+        if (cueHits.length > 0) {
+          isDraggingCueBall = true;
+          return;
+        }
+
+        const hit = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(tablePlane, hit)) {
+          if (cameraMode === 'top') {
+            lastDragRadialAngle = Math.atan2(hit.x - cueBall.x, hit.z - cueBall.z);
+            for (const b of balls) {
+              if (b.number !== 0 && !b.pocketed && Math.hypot(hit.x - b.x, hit.z - b.z) < BALL_R * 2.1) {
+                aimAngle = Math.atan2(b.x - cueBall.x, b.z - cueBall.z);
+                break;
+              }
+            }
+          }
+        }
+
+        isAimDraggingOnTable = true;
+        lastPointerX = e.clientX;
+        if (userSettings.autoFadeHud) document.body.classList.add('aim-fading');
+      });
+
+      window.addEventListener('pointermove', e => {
+        if (isDraggingCueBall && gameState === 'AIMING') {
+          updateRaycaster(e.clientX, e.clientY);
+          const hit = new THREE.Vector3();
+          if (raycaster.ray.intersectPlane(tablePlane, hit)) {
+            const maxX = isOpeningBreak ? -PLAY_W * 0.25 : PLAY_W / 2 - BALL_R - 0.01;
+            const clampedX = THREE.MathUtils.clamp(hit.x, -PLAY_W / 2 + BALL_R + 0.01, maxX);
+            const clampedZ = THREE.MathUtils.clamp(hit.z, -PLAY_L / 2 + BALL_R + 0.01, PLAY_L / 2 - BALL_R - 0.01);
+            placeCueBallWithoutOverlap(clampedX, clampedZ);
+          }
+          return;
+        }
+
+        if (!isAimDraggingOnTable || gameState !== 'AIMING') return;
+
+        if (cameraMode === 'top') {
+          updateRaycaster(e.clientX, e.clientY);
+          const hit = new THREE.Vector3();
+          if (raycaster.ray.intersectPlane(tablePlane, hit)) {
+            const curRad = Math.atan2(hit.x - cueBall.x, hit.z - cueBall.z);
+            let deltaRad = curRad - lastDragRadialAngle;
+            while (deltaRad > Math.PI) deltaRad -= Math.PI * 2;
+            while (deltaRad < -Math.PI) deltaRad += Math.PI * 2;
+            const fineFactor = e.shiftKey ? 0.25 : 1.0;
+            aimAngle += deltaRad * fineFactor * userSettings.aimSensitivity;
+            lastDragRadialAngle = curRad;
+          }
+        } else {
+          const dx = e.clientX - lastPointerX;
+          lastPointerX = e.clientX;
+          const fineFactor = e.shiftKey ? 0.22 : 1.0;
+          aimAngle += dx * 0.0045 * fineFactor * userSettings.aimSensitivity;
+        }
+      });
+
+      window.addEventListener('pointerup', () => {
+        isDraggingCueBall = false;
+        isAimDraggingOnTable = false;
+        document.body.classList.remove('aim-fading');
+      });
+
+      // Keyboard Shortcuts
+      let spaceCharging = false;
+      window.addEventListener('keydown', e => {
+        if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+
+        if (e.code === 'Escape') {
+          document.getElementById('main-menu-modal').classList.toggle('hidden');
+          return;
+        }
+        if (e.code === 'KeyM') {
+          muteBtn.click();
+          return;
+        }
+        if (e.code === 'Digit1') setCameraViewMode('aim');
+        if (e.code === 'Digit2') setCameraViewMode('orbit');
+        if (e.code === 'Digit3') setCameraViewMode('top');
+
+        if (gameState === 'AIMING') {
+          if (e.code === 'ArrowLeft' || e.code === 'KeyA') aimAngle -= (e.shiftKey ? 0.003 : 0.018) * userSettings.aimSensitivity;
+          if (e.code === 'ArrowRight' || e.code === 'KeyD') aimAngle += (e.shiftKey ? 0.003 : 0.018) * userSettings.aimSensitivity;
+          if (e.code === 'Space') {
+            e.preventDefault();
+            spaceCharging = true;
+          }
+        }
+        if (e.code === 'KeyV') {
+          const next = cameraMode === 'aim' ? 'orbit' : (cameraMode === 'orbit' ? 'top' : 'aim');
+          setCameraViewMode(next);
+        }
+      });
+
+      window.addEventListener('keyup', e => {
+        if (e.code === 'Space' && spaceCharging) {
+          spaceCharging = false;
+          if (shotPower > 0.04 && gameState === 'AIMING') {
+            pendingStrikePower = shotPower;
+            strokeAnimPhase = shotPower * 0.26;
+            gameState = 'STRIKING';
+          }
+          shotPower = 0;
+          updatePowerHUD();
+        }
+      });
+
+      // Lounge Modal Segmented & Input Controls
+      document.querySelectorAll('#mode-seg .seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#mode-seg .seg-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          userSettings.gameMode = btn.dataset.mode;
+          document.getElementById('ai-diff-group').style.display = userSettings.gameMode === 'AI' ? 'block' : 'none';
+          document.getElementById('p2-name-wrap').style.display = userSettings.gameMode === 'LOCAL' ? 'block' : 'none';
+          updateScoreboardHUD();
+        });
+      });
+      document.getElementById('p2-name-wrap').style.display = 'none';
+
+      document.getElementById('p1-name-input').addEventListener('input', e => {
+        userSettings.p1CustomName = e.target.value.trim() || 'Player 1';
+        updateScoreboardHUD();
+      });
+
+      document.getElementById('p2-name-input').addEventListener('input', e => {
+        userSettings.p2CustomName = e.target.value.trim() || 'Player 2';
+        updateScoreboardHUD();
+      });
+
+      document.querySelectorAll('#diff-seg .seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#diff-seg .seg-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          userSettings.aiDifficulty = btn.dataset.diff;
+          updateScoreboardHUD();
+        });
+      });
+
+      document.querySelectorAll('#felt-seg .seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#felt-seg .seg-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          userSettings.feltColor = btn.dataset.felt;
+          if (feltMaterial) {
+            feltMaterial.map = createProceduralFeltTexture(FELT_PALETTES[userSettings.feltColor]);
+            feltMaterial.needsUpdate = true;
+          }
+        });
+      });
+
+      document.querySelectorAll('#guide-style-seg .seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#guide-style-seg .seg-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          userSettings.guideStyle = btn.dataset.style;
+        });
+      });
+
+      document.querySelectorAll('#cloth-speed-seg .seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#cloth-speed-seg .seg-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          userSettings.clothSpeed = btn.dataset.speed;
+        });
+      });
+
+      document.getElementById('guide-len-slider').addEventListener('input', e => {
+        const val = Number(e.target.value);
+        userSettings.guideLength = val / 100;
+        document.getElementById('guide-len-label').textContent = `${val}%`;
+      });
+
+      document.getElementById('aim-sens-slider').addEventListener('input', e => {
+        const val = Number(e.target.value);
+        userSettings.aimSensitivity = val / 100;
+        document.getElementById('aim-sens-label').textContent = `${val}%`;
+      });
+
+      document.getElementById('audio-vol-slider').addEventListener('input', e => {
+        const val = Number(e.target.value);
+        userSettings.masterVolume = val / 100;
+        document.getElementById('audio-vol-label').textContent = `${val}%`;
+      });
+
+      document.getElementById('new-rack-btn').addEventListener('click', () => {
+        document.getElementById('main-menu-modal').classList.add('hidden');
+        document.getElementById('gameover-modal').classList.add('hidden');
+        currentPlayer = 0;
+        rackRegulation8Ball();
+        beginPlayerTurn(true, 'Opening Break Shot');
+      });
+
+      document.getElementById('resume-game-btn').addEventListener('click', () => {
+        document.getElementById('main-menu-modal').classList.add('hidden');
+      });
+
+      document.getElementById('play-again-btn').addEventListener('click', () => {
+        document.getElementById('gameover-modal').classList.add('hidden');
+        currentPlayer = 0;
+        rackRegulation8Ball();
+        beginPlayerTurn(true, 'Opening Break Shot');
+      });
+
+      document.getElementById('gameover-menu-btn').addEventListener('click', () => {
+        document.getElementById('gameover-modal').classList.add('hidden');
+        document.getElementById('main-menu-modal').classList.remove('hidden');
+      });
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      setInterval(() => {
+        if (spaceCharging && gameState === 'AIMING') {
+          shotPower = Math.min(1, shotPower + 0.022);
+          updatePowerHUD();
+        }
+      }, 25);
+    }
+
+    // =========================================================================
+    // 13. INITIALIZATION & MAIN ANIMATION LOOP
+    // =========================================================================
+    buildRegulationTable();
+    createAllBalls();
+    buildParametricCueStick();
+    buildAimingGuides();
+    rackRegulation8Ball();
+    setupAllEventListeners();
+    beginPlayerTurn(true, 'Opening Break Shot');
+
+    let lastFrameTime = performance.now();
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = (now - lastFrameTime) / 1000;
+      lastFrameTime = now;
+
+      if (dustParticles) {
+        dustParticles.rotation.y += dt * 0.025;
+      }
+
+      if (gameState === 'STRIKING') {
+        strokeAnimPhase -= dt * 2.4;
+        if (strokeAnimPhase <= 0) {
+          strokeAnimPhase = 0;
+          executeCueStrike(pendingStrikePower);
+        }
+      }
+
+      if (gameState === 'SIMULATING') {
+        stepBilliardPhysics(dt);
+        if (areAllBallsSettled()) {
+          evaluateCompletedTurn();
+        }
+      }
+
+      updateCueAndAimGuides();
+      updateCameraRig(dt);
+      renderer.render(scene, camera);
+    }
+
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
